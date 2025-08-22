@@ -1,0 +1,7 @@
+tensorflow
+opencv-python
+numpy
+requests
+imutils
+imageio
+imageio-ffmpeg

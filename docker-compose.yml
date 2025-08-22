@@ -1,0 +1,68 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: my_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: my_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      # DATABASE_URL yang benar untuk koneksi ke kontainer 'db'
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/mydb"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  object-detection:
+    build: ./object-detection
+    container_name: my_object_detection
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:8080" # Port untuk streaming video
+    environment:
+      # GANTI dengan URL kamera Anda yang sebenarnya
+      CCTV_STREAM_URL: "https://mam.jogjaprov.go.id:1937/cctv-bantul/TPRParangtritis.stream/chunklist_w307863718.m3u8"
+      FASTAPI_ENDPOINT: "http://backend:8000/analytics/"
+
+  frontend:
+    build: ./frontend
+    container_name: my_frontend
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80" # Port untuk frontend yang disajikan oleh Nginx
+    environment:
+      VITE_BACKEND_API_URL: "http://backend:8000"
+
+volumes:
+  db_data:

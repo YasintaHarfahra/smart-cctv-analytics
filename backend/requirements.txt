@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+pydantic_settings
+opencv-python==4.9.0.80  # Versi yang kompatibel
+numpy==1.26.4            # Versi yang kompatibel
