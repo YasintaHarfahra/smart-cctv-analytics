@@ -29,6 +29,7 @@ services:
     environment:
       # DATABASE_URL yang benar untuk koneksi ke kontainer 'db'
       DATABASE_URL: 'postgresql://postgres.zbunxkzntnjaknkeabpq:cctvanalytics123@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres'
+      CCTV_STREAM_URL: 'https://mam.jogjaprov.go.id:1937/cctv-bantul/TPRParangtritis.stream/chunklist_w307863718.m3u8'
     healthcheck:
       test: ['CMD-SHELL', 'curl -f http://localhost:8000/ || exit 1']
       interval: 10s
@@ -48,7 +49,7 @@ services:
     environment:
       # GANTI dengan URL kamera Anda yang sebenarnya
       CCTV_STREAM_URL: 'https://mam.jogjaprov.go.id:1937/cctv-bantul/TPRParangtritis.stream/chunklist_w307863718.m3u8'
-      FASTAPI_ENDPOINT: 'http://backend:8000'
+      FASTAPI_ENDPOINT: 'http://backend:8000/analytics/'
 
   frontend:
     build: ./frontend

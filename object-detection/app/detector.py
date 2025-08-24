@@ -7,7 +7,6 @@ import os
 import collections
 from datetime import datetime
 from flask import Response, Flask
-from imutils.video import VideoStream
 import threading
 
 # --- Konfigurasi ---
@@ -89,23 +88,27 @@ def send_to_fastapi(object_counts_per_frame):
 def detect_thread():
     global outputFrame, lock
 
+    # Initialize video capture using cv2.VideoCapture like in main.py
     if CCTV_STREAM_URL == "0":
         print("INFO: Attempting to open default webcam (index 0)...")
-        vs = VideoStream(src=0).start()
+        vs = cv2.VideoCapture(0)
     else:
         print(f"INFO: Attempting to open video stream from: {CCTV_STREAM_URL}")
-        vs = VideoStream(CCTV_STREAM_URL).start()
+        vs = cv2.VideoCapture(CCTV_STREAM_URL, cv2.CAP_FFMPEG)
 
-    time.sleep(2.0)
+    if not vs.isOpened():
+        print(f"❌ Error: Gagal membuka stream video dari {CCTV_STREAM_URL}")
+        return
+
     print("INFO: Video stream opened and ready for processing.")
 
     last_api_send_time = time.time()
 
     while True:
-        frame = vs.read()
-        if frame is None:
-            print("WARNING: Failed to grab frame. Skipping...")
-            time.sleep(0.1) # Brief pause before retrying
+        success, frame = vs.read()
+        if not success:
+            print("❌ Error: Gagal membaca frame dari stream.")
+            time.sleep(0.1)  # Brief pause before retrying
             continue
 
         height, width, _ = frame.shape
@@ -162,6 +165,9 @@ def detect_thread():
         with lock:
             outputFrame = frame.copy()
 
+    # Clean up video capture
+    vs.release()
+
 # --- Fungsi untuk Streaming MJPEG ---
 def generate():
     global outputFrame, lock
@@ -188,7 +194,24 @@ def generate():
 # --- Endpoint Flask untuk Streaming ---
 @app.route("/video_feed")
 def video_feed():
-    return Response(generate(), mimetype = "multipart/x-mixed-replace; boundary=frame")
+    """Video streaming route. Put this in the src attribute of an img tag."""
+    return Response(generate(),
+                    mimetype = "multipart/x-mixed-replace; boundary=frame")
+
+@app.route("/")
+def index():
+    """Home page."""
+    return '''
+    <html>
+      <head>
+        <title>Object Detection Stream</title>
+      </head>
+      <body>
+        <h1>Object Detection Stream</h1>
+        <img src="/video_feed" width="800" height="600">
+      </body>
+    </html>
+    '''
 
 # --- Main Thread untuk Menjalankan Flask Server dan Deteksi ---
 if __name__ == "__main__":

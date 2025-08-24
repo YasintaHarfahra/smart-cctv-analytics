@@ -27,7 +27,7 @@ app.add_middleware(
 )
 
 # --- Variabel Global untuk Streaming ---
-CCTV_STREAM_URL = "https://mam.jogjaprov.go.id:1937/cctv-bantul/TPRParangtritis.stream/chunklist_w307863718.m3u8"
+CCTV_STREAM_URL = os.getenv("CCTV_STREAM_URL", "https://mam.jogjaprov.go.id:1937/cctv-bantul/TPRParangtritis.stream/chunklist_w307863718.m3u8")
 
 outputFrame = None
 lock = threading.Lock()
