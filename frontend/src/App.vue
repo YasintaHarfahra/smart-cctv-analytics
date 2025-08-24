@@ -14,58 +14,80 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-// ----------------------
-// Konfigurasi Backend
-// ----------------------
-const API_URL =
-  import.meta.env.VITE_BACKEND_API_URL?.replace(/\/$/, "") || "http://backend:8000";
-
-// Stream MJPEG dari FastAPI
-const videoStreamUrl = ref("http://localhost:8080/video_feed");
-
-// ----------------------
-// State
-// ----------------------
+// State Management
 const analyticsData = ref([]);
 const totalCounts = ref({});
+const isLoading = ref(false);
+const error = ref(null);
 let intervalId = null;
 
-// Axios instance
+// Environment Variables & Configuration
+const API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://localhost:8000";
+const VIDEO_STREAM_URL = import.meta.env.VITE_VIDEO_STREAM_URL || "http://localhost:8000/video_feed";
+
+// In your frontend API configuration
 const http = axios.create({
-  baseURL: API_URL,
-  timeout: 15000,
+  baseURL: 'http://localhost:8000',
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  },
+  withCredentials: true
 });
 
-// ----------------------
-// Data fetching
-// ----------------------
+// Enhanced fetchData function with better error handling
 const fetchData = async () => {
-  try {
-    const { data } = await http.get("/analytics/", { params: { limit: 50 } });
-    analyticsData.value = data;
+  isLoading.value = true;
+  error.value = null;
 
+  try {
+    const response = await http.get("/analytics/", { 
+      params: { limit: 50 },
+      // Add retry logic
+      retry: 3,
+      retryDelay: (retryCount) => retryCount * 1000
+    });
+    
+    console.log("API Response:", response); // For debugging
+
+    if (!response.data) {
+      throw new Error("No data received");
+    }
+
+    analyticsData.value = Array.isArray(response.data) ? response.data : [];
+    
     const counts = {};
-    for (const item of data) {
+    for (const item of analyticsData.value) {
       counts[item.object_type] = (counts[item.object_type] || 0) + item.count;
     }
     totalCounts.value = counts;
-  } catch (error) {
-    console.error("Error fetching analytics data:", error);
+
+  } catch (err) {
+    console.error("Detailed error:", {
+      message: err.message,
+      response: err.response,
+      status: err.response?.status
+    });
+    error.value = "Connection error. Please check if the backend server is running.";
+  } finally {
+    isLoading.value = false;
   }
 };
 
+// Lifecycle Hooks
 onMounted(() => {
   fetchData();
   intervalId = setInterval(fetchData, 5000);
 });
 
 onUnmounted(() => {
-  if (intervalId) clearInterval(intervalId);
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
 });
 
-// ----------------------
-// Chart config
-// ----------------------
+// Chart Configuration
 const chartData = computed(() => ({
   labels: Object.keys(totalCounts.value),
   datasets: [
@@ -92,6 +114,20 @@ const chartOptions = {
     legend: { position: "top" },
     title: { display: true, text: "Live Object Detection Counts by Type" },
   },
+};
+
+// Enhanced video error handler
+const handleVideoError = (e) => {
+  console.error("Video stream error:", e);
+  error.value = "Video stream unavailable. Retrying...";
+  
+  // Retry loading video after delay
+  setTimeout(() => {
+    const videoElement = document.querySelector('img[alt="Live CCTV"]');
+    if (videoElement) {
+      videoElement.src = `${VIDEO_STREAM_URL}?t=${Date.now()}`;
+    }
+  }, 3000);
 };
 </script>
 
@@ -126,17 +162,29 @@ const chartOptions = {
       <!-- CCTV Feed -->
       <section class="bg-white rounded-2xl shadow-md p-6 flex flex-col">
         <h3 class="text-lg font-semibold mb-4 border-b pb-2">📹 Live CCTV Feed</h3>
-        <img
-          :src="videoStreamUrl"
-          alt="Live CCTV"
-          class="rounded-lg border shadow-md max-h-[400px] object-cover mx-auto"
-        />
+        <div class="relative">
+          <img
+            :src="VIDEO_STREAM_URL"
+            alt="Live CCTV"
+            class="rounded-lg border shadow-md max-h-[400px] object-cover mx-auto"
+            @error="handleVideoError"
+          />
+          <div v-if="error" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
+            <p class="text-white text-center p-4">{{ error }}</p>
+          </div>
+        </div>
       </section>
 
       <!-- Chart -->
       <section class="bg-white rounded-2xl shadow-md p-6 flex flex-col">
         <h3 class="text-lg font-semibold mb-4 border-b pb-2">📊 Object Distribution</h3>
-        <div v-if="Object.keys(totalCounts).length > 0" class="h-[350px]">
+        <div v-if="isLoading" class="flex-1 flex items-center justify-center">
+          <div class="animate-spin rounded-full h-12 w-12 border-4 border-green-500 border-t-transparent"></div>
+        </div>
+        <div v-else-if="error" class="flex-1 flex items-center justify-center">
+          <p class="text-red-500">{{ error }}</p>
+        </div>
+        <div v-else-if="Object.keys(totalCounts).length > 0" class="h-[350px]">
           <Bar :data="chartData" :options="chartOptions" />
         </div>
         <p v-else class="text-gray-500 italic text-center">
@@ -163,16 +211,14 @@ const chartOptions = {
                 :key="index"
                 class="odd:bg-gray-50 even:bg-white hover:bg-green-50 transition"
               >
-                <td class="px-4 py-2">
-                  {{ new Date(data.timestamp).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }) }}
-                </td>
-                <td class="px-4 py-2 font-medium">{{ data.object_type }}</td>
+                <td class="px-4 py-2">{{ new Date(data.timestamp).toLocaleString() }}</td>
+                <td class="px-4 py-2">{{ data.object_type }}</td>
                 <td class="px-4 py-2">{{ data.count }}</td>
-                <td class="px-4 py-2">{{ data.area_name || "-" }}</td>
+                <td class="px-4 py-2">{{ data.area }}</td>
               </tr>
               <tr v-if="analyticsData.length === 0">
-                <td colspan="4" class="px-4 py-4 text-center text-gray-500 italic">
-                  No recent detection logs available.
+                <td colspan="4" class="px-4 py-8 text-center text-gray-500 italic">
+                  No detection data available...
                 </td>
               </tr>
             </tbody>

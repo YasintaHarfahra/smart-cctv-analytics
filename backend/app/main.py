@@ -6,23 +6,27 @@ from fastapi import FastAPI, Response, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+# Tambahan import untuk error yang muncul
+from typing import List
+from sqlalchemy.orm import Session
+
+from . import crud
+from .schemas import AnalyticsData, AnalyticsDataCreate
+from .database import get_db
+
 # --- Inisialisasi Aplikasi FastAPI ---
 app = FastAPI()
 
-# --- Konfigurasi CORS ---
-origins = [
-    "http://localhost:3000", "http://localhost:5173",  
-]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]  # Add this line
 )
 
 # --- Variabel Global untuk Streaming ---
-# CCTV Source (ganti dengan URL kamera Anda)
 CCTV_STREAM_URL = "https://mam.jogjaprov.go.id:1937/cctv-bantul/TPRParangtritis.stream/chunklist_w307863718.m3u8"
 
 outputFrame = None
@@ -32,10 +36,9 @@ video_stream = None
 # --- Fungsi untuk Membuka dan Membaca Stream Video ---
 def video_stream_reader():
     global outputFrame, lock, video_stream
-    
-    # Gunakan cv2.VideoCapture dengan FFmpeg untuk stabilitas
+
     vs = cv2.VideoCapture(CCTV_STREAM_URL, cv2.CAP_FFMPEG)
-    
+
     if not vs.isOpened():
         print(f"❌ Error: Gagal membuka stream video dari {CCTV_STREAM_URL}")
         return
@@ -45,10 +48,10 @@ def video_stream_reader():
         if not success:
             print("❌ Error: Gagal membaca frame dari stream.")
             break
-        
+
         with lock:
             outputFrame = frame.copy()
-    
+
     vs.release()
 
 # --- Fungsi untuk Menyajikan Frame sebagai Streaming MJPEG ---
@@ -63,7 +66,7 @@ def generate():
             ret, buffer = cv2.imencode(".jpg", outputFrame)
             if not ret:
                 continue
-        
+
         frame_bytes = buffer.tobytes()
         yield (
             b"--frame\r\n"
@@ -94,6 +97,17 @@ def root():
         },
         "video_source": CCTV_STREAM_URL
     }
+
+# Endpoint untuk menerima data analitik deteksi objek
+@app.post("/analytics/", response_model=AnalyticsData)
+def create_analytics_data(data: AnalyticsDataCreate, db: Session = Depends(get_db)):
+    return crud.create_analytics_data(db=db, data=data)
+
+# Endpoint untuk mengambil data analitik deteksi objek
+@app.get("/analytics/", response_model=List[AnalyticsData])
+def read_analytics_data(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    data = crud.get_analytics_data(db, skip=skip, limit=limit)
+    return data
 
 # --- Jalankan Thread Video Stream ---
 @app.on_event("startup")

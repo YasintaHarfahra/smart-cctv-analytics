@@ -16,6 +16,13 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 class AnalyticsDataModel(Base):
     __tablename__ = "analytics_data" # HARUS SAMA dengan nama tabel di Supabase
 
