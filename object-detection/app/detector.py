@@ -10,21 +10,13 @@ from flask import Response, Flask
 import threading
 
 # --- Konfigurasi ---
-CCTV_STREAM_URL = os.getenv("CCTV_STREAM_URL", "https://mam.jogjaprov.go.id:1937/cctv-bantul/TPRParangtritis.stream/chunklist_w307863718.m3u8")
+CCTV_STREAM_URL = os.getenv("CCTV_STREAM_URL", "https://mam.jogjaprov.go.id:1937/cctv-public/ViewTugu.stream/chunklist_w767947877.m3u8")
 FASTAPI_ENDPOINT = os.getenv("FASTAPI_ENDPOINT", "http://backend:8000/analytics/")
-MODEL_PATH = "app/models/yolov4-tiny.tflite"
+MODEL_PATH = "object-detection/code.ipynb"
 
 CLASSES = [
     'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
-    'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat',
-    'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack',
-    'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
-    'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-    'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
-    'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair',
-    'couch', 'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote',
-    'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book',
-    'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+    'traffic light', 
 ]
 
 CONFIDENCE_THRESHOLD = 0.5

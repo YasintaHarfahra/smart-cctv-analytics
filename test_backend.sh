@@ -15,3 +15,6 @@ docker logs --tail=20 my_backend
 
 echo "🩺 Testing health endpoint..."
 curl -s http://localhost:8000/health || echo "❌ Backend belum siap!"
+
+echo "📡 Testing CCTV list endpoint..."
+curl -s http://localhost:8000/cctv | jq .
