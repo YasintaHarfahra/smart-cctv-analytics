@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse, Response
 import httpx
 import json
 import os
+from urllib.parse import urljoin, quote, urlparse
 
 app = FastAPI()
 
@@ -58,9 +59,68 @@ async def proxy_stream(url: str):
 
             content_type = r.headers.get("content-type", "application/octet-stream")
 
-            # Kalau file playlist (.m3u8)
+            # Kalau file playlist (.m3u8) → rewrite semua URI agar lewat proxy
             if url.endswith(".m3u8"):
-                return Response(content=r.content, media_type="application/vnd.apple.mpegurl")
+                try:
+                    text = r.text
+                    # Gunakan URL upstream yang diminta klien agar resolve relatif benar
+                    base_url = str(url)
+
+                    def rewrite_line(line: str) -> str:
+                        line_stripped = line.strip()
+                        if not line_stripped or line_stripped.startswith('#'):
+                            # Rewrites for lines with URI attributes in tags (#EXT-X-KEY, #EXT-X-MAP)
+                            if line_stripped.startswith('#EXT-X-KEY') or line_stripped.startswith('#EXT-X-MAP'):
+                                # Find URI="..."
+                                prefix = 'URI="'
+                                if 'URI="' in line_stripped:
+                                    start = line_stripped.index(prefix) + len(prefix)
+                                    end = line_stripped.find('"', start)
+                                    if end != -1:
+                                        uri_value = line_stripped[start:end]
+                                        # Koreksi jika origin keliru menjadi localhost:3001/api/
+                                        parsed = urlparse(uri_value)
+                                        candidate = uri_value
+                                        if parsed.scheme in ("http", "https"):
+                                            if parsed.netloc in ("localhost:3001", "127.0.0.1:3001") and parsed.path.startswith("/api/"):
+                                                candidate = parsed.path.replace("/api/", "", 1)
+                                        elif uri_value.startswith("/api/"):
+                                            candidate = uri_value.replace("/api/", "", 1)
+
+                                        absolute = urljoin(base_url, candidate)
+                                        proxied = '/api/proxy?url=' + quote(absolute, safe='')
+                                        return line_stripped[:start] + proxied + line_stripped[end:]
+                            return line
+
+                        # For URI lines (variants or segments)
+                        candidate = line_stripped
+                        parsed = urlparse(candidate)
+                        if parsed.scheme in ("http", "https"):
+                            if parsed.netloc in ("localhost:3001", "127.0.0.1:3001") and parsed.path.startswith("/api/"):
+                                candidate = parsed.path.replace("/api/", "", 1)
+                        elif candidate.startswith("/api/"):
+                            candidate = candidate.replace("/api/", "", 1)
+
+                        absolute = urljoin(base_url, candidate)
+                        proxied = '/api/proxy?url=' + quote(absolute, safe='')
+                        return proxied + ('\n' if line.endswith('\n') else '')
+
+                    # Apply rewrite per line
+                    rewritten_lines = []
+                    for ln in text.splitlines(keepends=True):
+                        rewritten_lines.append(rewrite_line(ln))
+                    rewritten = ''.join(rewritten_lines)
+
+                    return Response(
+                        content=rewritten,
+                        media_type="application/vnd.apple.mpegurl",
+                        headers={
+                            "Cache-Control": "no-cache, no-store, must-revalidate"
+                        }
+                    )
+                except Exception as rewrite_error:
+                    # Fallback: return original if rewrite fails
+                    return Response(content=r.content, media_type="application/vnd.apple.mpegurl")
 
             # Kalau file segment video (.ts atau lainnya), stream langsung
             return StreamingResponse(r.aiter_bytes(), media_type=content_type)
