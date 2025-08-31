@@ -1,15 +1,21 @@
 # Gunakan image Python resmi
 FROM python:3.11-slim
 
-# Install system dependencies for OpenCV
+# Install minimal system dependencies for OpenCV headless
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
     libgthread-2.0-0 \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libv4l-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

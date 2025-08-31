@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 httpx
 websockets
-opencv-python
+opencv-python-headless
 ultralytics
 torch
 torchvision
