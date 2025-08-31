@@ -1,26 +1,31 @@
 # Gunakan image Python resmi
 FROM python:3.11-slim
 
+# Install system dependencies for OpenCV
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libgthread-2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 
-# Install dependencies OS terlebih dahulu (supaya caching lebih efektif)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    curl\
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy hanya requirements.txt dulu (biar caching pip lebih efektif)
+# Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install dependencies Python (gunakan cache biar lebih cepat)
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy semua source code ke container
+# Copy application code
 COPY . .
+
+# Download YOLO model
+RUN python download_model.py
 
 # Expose port FastAPI (default: 8000)
 EXPOSE 8000

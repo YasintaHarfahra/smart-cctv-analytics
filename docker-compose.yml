@@ -1,31 +1,30 @@
+version: '3.8'
+
 services:
   backend:
     build: ./backend
-    container_name: my_backend
-    restart: always
     ports:
-      - '8000:8000'
+      - "8000:8000"
     volumes:
-      - ./backend/cctv.json:/app/cctv.json
-    healthcheck:
-      test: ['CMD-SHELL', 'curl -f http://localhost:8000/cctv || exit 1']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      - ./backend:/app
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      - cctv-network
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
-    container_name: my_frontend
-    restart: always
-    depends_on:
-      backend:
-        condition: service_healthy
     ports:
-      - '3000:80'
-    environment:
-      # frontend di browser pakai proxy → cukup set base path /api
-      VITE_BACKEND_API_URL: '/api'
+      - "3001:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    depends_on:
+      - backend
+    networks:
+      - cctv-network
+    restart: unless-stopped
 
-volumes:
-  db_data:
+networks:
+  cctv-network:
+    driver: bridge
