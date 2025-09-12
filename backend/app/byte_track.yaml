@@ -1,0 +1,11 @@
+# ByteTrack default configuration for YOLOv8
+tracker_type: bytetrack
+
+track_thresh: 0.5         # confidence threshold for object to be considered
+match_thresh: 0.8         # IoU threshold for matching
+track_buffer: 30          # how long to keep a lost track (frames)
+min_box_area: 10          # minimum box area (filtering noise)
+mot20: False              # True if using MOT20 dataset (high crowd scenes)
+
+# Optional advanced params (default Ultralytics)
+frame_rate: 60
