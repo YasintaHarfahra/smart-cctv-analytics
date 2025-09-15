@@ -384,6 +384,220 @@ def stop_detection():
     detector.stop()
     return {"message": "Detection stopped"}
 
+# Debug endpoints
+@app.post("/detection/debug/overlay")
+def toggle_debug_overlay(enabled: bool = True):
+    """Toggle debug overlay for visual verification"""
+    detector.enable_debug_overlay(enabled)
+    return {"message": f"Debug overlay {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/debug/logging")
+def toggle_debug_logging(enabled: bool = True):
+    """Toggle debug logging for coordinates and frame info"""
+    detector.enable_debug_logging(enabled)
+    return {"message": f"Debug logging {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/coordinates")
+def use_original_coordinates(enabled: bool = True):
+    """Use original video coordinates instead of resized frame coordinates"""
+    detector.use_original_video_coordinates(enabled)
+    return {"message": f"Using original video coordinates: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/resize")
+def toggle_frame_resize(disabled: bool = True):
+    """Disable/enable frame resize to use original video dimensions"""
+    detector.disable_frame_resize(disabled)
+    return {"message": f"Frame resize {'disabled' if disabled else 'enabled'}"}
+
+@app.post("/detection/validation")
+def toggle_coordinate_validation(enabled: bool = True):
+    """Enable/disable coordinate validation"""
+    detector.enable_coordinate_validation(enabled)
+    return {"message": f"Coordinate validation {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/force-original")
+def force_original_video_size(enabled: bool = True):
+    """Force using original video size for all operations"""
+    detector.force_original_video_size(enabled)
+    return {"message": f"Force original video size: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/auto-fix")
+def toggle_auto_fix_coordinates(enabled: bool = True):
+    """Enable/disable automatic coordinate fixing"""
+    detector.enable_auto_fix_coordinates(enabled)
+    return {"message": f"Auto fix coordinates: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/smart-fix")
+def toggle_smart_coordinate_fix(enabled: bool = True):
+    """Enable/disable smart coordinate fixing"""
+    detector.enable_smart_coordinate_fix(enabled)
+    return {"message": f"Smart coordinate fix: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/adaptive-fix")
+def toggle_adaptive_coordinate_fix(enabled: bool = True):
+    """Enable/disable adaptive coordinate fixing"""
+    detector.enable_adaptive_coordinate_fix(enabled)
+    return {"message": f"Adaptive coordinate fix: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/intelligent-fix")
+def toggle_intelligent_coordinate_fix(enabled: bool = True):
+    """Enable/disable intelligent coordinate fixing"""
+    detector.enable_intelligent_coordinate_fix(enabled)
+    return {"message": f"Intelligent coordinate fix: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/ultimate-fix")
+def toggle_ultimate_coordinate_fix(enabled: bool = True):
+    """Enable/disable ultimate coordinate fixing"""
+    detector.enable_ultimate_coordinate_fix(enabled)
+    return {"message": f"Ultimate coordinate fix: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/mega-fix")
+def toggle_mega_coordinate_fix(enabled: bool = True):
+    """Enable/disable mega coordinate fixing"""
+    detector.enable_mega_coordinate_fix(enabled)
+    return {"message": f"Mega coordinate fix: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/super-fix")
+def toggle_super_coordinate_fix(enabled: bool = True):
+    """Enable/disable super coordinate fixing"""
+    detector.enable_super_coordinate_fix(enabled)
+    return {"message": f"Super coordinate fix: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/hyper-fix")
+def toggle_hyper_coordinate_fix(enabled: bool = True):
+    """Enable/disable hyper coordinate fixing"""
+    detector.enable_hyper_coordinate_fix(enabled)
+    return {"message": f"Hyper coordinate fix: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/ultra-fix")
+def toggle_ultra_coordinate_fix(enabled: bool = True):
+    """Enable/disable ultra coordinate fixing"""
+    detector.enable_ultra_coordinate_fix(enabled)
+    return {"message": f"Ultra coordinate fix: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/epic-fix")
+def toggle_epic_coordinate_fix(enabled: bool = True):
+    """Enable/disable epic coordinate fixing"""
+    detector.enable_epic_coordinate_fix(enabled)
+    return {"message": f"Epic coordinate fix: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/legendary-fix")
+def toggle_legendary_coordinate_fix(enabled: bool = True):
+    """Enable/disable legendary coordinate fixing"""
+    detector.enable_legendary_coordinate_fix(enabled)
+    return {"message": f"Legendary coordinate fix: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/force-no-resize")
+def toggle_force_no_resize(enabled: bool = True):
+    """Force no resize at all - use original video size"""
+    detector.enable_force_no_resize(enabled)
+    return {"message": f"Force no resize: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/raw-coordinates")
+def toggle_raw_coordinates(enabled: bool = True):
+    """Use raw coordinates without any scaling"""
+    detector.enable_raw_coordinates(enabled)
+    return {"message": f"Raw coordinates: {'enabled' if enabled else 'disabled'}"}
+
+@app.post("/detection/config")
+def update_detection_config(
+    frame_skip: int = None,
+    target_width: int = None,
+    buffer_grab_count: int = None,
+    smoothing_enabled: bool = None,
+    smoothing_alpha: float = None,
+    use_original_coordinates: bool = None,
+    disable_resize: bool = None,
+    coordinate_validation: bool = None,
+    force_original_size: bool = None,
+    auto_fix_coordinates: bool = None,
+    smart_coordinate_fix: bool = None,
+    adaptive_coordinate_fix: bool = None,
+    intelligent_coordinate_fix: bool = None,
+    ultimate_coordinate_fix: bool = None,
+    mega_coordinate_fix: bool = None,
+    super_coordinate_fix: bool = None,
+    hyper_coordinate_fix: bool = None,
+    ultra_coordinate_fix: bool = None,
+    epic_coordinate_fix: bool = None,
+    legendary_coordinate_fix: bool = None,
+    force_no_resize: bool = None,
+    use_raw_coordinates: bool = None
+):
+    """Update detection configuration parameters"""
+    if frame_skip is not None:
+        detector.frame_skip = max(1, int(frame_skip))
+    if target_width is not None:
+        detector.target_width = int(target_width) if target_width > 0 else None
+    if buffer_grab_count is not None:
+        detector.buffer_grab_count = max(0, int(buffer_grab_count))
+    if smoothing_enabled is not None:
+        detector.smoothing_enabled = bool(smoothing_enabled)
+    if smoothing_alpha is not None:
+        detector.smoothing_alpha = max(0.0, min(1.0, float(smoothing_alpha)))
+    if use_original_coordinates is not None:
+        detector.use_original_coordinates = bool(use_original_coordinates)
+    if disable_resize is not None:
+        detector.disable_resize = bool(disable_resize)
+    if coordinate_validation is not None:
+        detector.coordinate_validation = bool(coordinate_validation)
+    if force_original_size is not None:
+        detector.force_original_size = bool(force_original_size)
+    if auto_fix_coordinates is not None:
+        detector.auto_fix_coordinates = bool(auto_fix_coordinates)
+    if smart_coordinate_fix is not None:
+        detector.smart_coordinate_fix = bool(smart_coordinate_fix)
+    if adaptive_coordinate_fix is not None:
+        detector.adaptive_coordinate_fix = bool(adaptive_coordinate_fix)
+    if intelligent_coordinate_fix is not None:
+        detector.intelligent_coordinate_fix = bool(intelligent_coordinate_fix)
+    if ultimate_coordinate_fix is not None:
+        detector.ultimate_coordinate_fix = bool(ultimate_coordinate_fix)
+    if mega_coordinate_fix is not None:
+        detector.mega_coordinate_fix = bool(mega_coordinate_fix)
+    if super_coordinate_fix is not None:
+        detector.super_coordinate_fix = bool(super_coordinate_fix)
+    if hyper_coordinate_fix is not None:
+        detector.hyper_coordinate_fix = bool(hyper_coordinate_fix)
+    if ultra_coordinate_fix is not None:
+        detector.ultra_coordinate_fix = bool(ultra_coordinate_fix)
+    if epic_coordinate_fix is not None:
+        detector.epic_coordinate_fix = bool(epic_coordinate_fix)
+    if legendary_coordinate_fix is not None:
+        detector.legendary_coordinate_fix = bool(legendary_coordinate_fix)
+    if force_no_resize is not None:
+        detector.force_no_resize = bool(force_no_resize)
+    if use_raw_coordinates is not None:
+        detector.use_raw_coordinates = bool(use_raw_coordinates)
+    
+    return {
+        "message": "Detection configuration updated",
+        "config": {
+            "frame_skip": detector.frame_skip,
+            "target_width": detector.target_width,
+            "buffer_grab_count": detector.buffer_grab_count,
+            "smoothing_enabled": detector.smoothing_enabled,
+            "smoothing_alpha": detector.smoothing_alpha,
+            "use_original_coordinates": detector.use_original_coordinates,
+            "disable_resize": detector.disable_resize,
+            "coordinate_validation": detector.coordinate_validation,
+            "force_original_size": detector.force_original_size,
+            "auto_fix_coordinates": detector.auto_fix_coordinates,
+            "smart_coordinate_fix": detector.smart_coordinate_fix,
+            "adaptive_coordinate_fix": detector.adaptive_coordinate_fix,
+            "intelligent_coordinate_fix": detector.intelligent_coordinate_fix,
+            "ultimate_coordinate_fix": detector.ultimate_coordinate_fix,
+            "mega_coordinate_fix": detector.mega_coordinate_fix,
+            "super_coordinate_fix": detector.super_coordinate_fix,
+            "hyper_coordinate_fix": detector.hyper_coordinate_fix,
+            "ultra_coordinate_fix": detector.ultra_coordinate_fix,
+            "epic_coordinate_fix": detector.epic_coordinate_fix,
+            "legendary_coordinate_fix": detector.legendary_coordinate_fix,
+            "force_no_resize": detector.force_no_resize,
+            "use_raw_coordinates": detector.use_raw_coordinates
+        }
+    }
+
 
 # 🔥 Proxy untuk streaming HLS (.m3u8 + .ts segments)
 @app.get("/proxy")
