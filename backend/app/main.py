@@ -49,9 +49,8 @@ def test_simple():
 origins = [
     "http://localhost",
     "http://localhost:3001",
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "http://localhost:3002",
+    "http://localhost:3003",
 ]
 
 app.add_middleware(
@@ -75,6 +74,29 @@ logger.info(f"Detector available: {DETECTOR_AVAILABLE}")
 logger.info(f"Python path: {sys.path[:3]}")
 
 
+# Simple in-memory cache for CCTV data to avoid repeated disk I/O
+_cctv_cache = {
+    "data": None,
+    "mtime": 0.0,
+}
+
+def _load_cctv_data_from_disk() -> dict:
+    with open(CCTV_FILE, "r") as f:
+        return json.load(f)
+
+def get_cctv_data_cached() -> dict:
+    try:
+        mtime = os.path.getmtime(CCTV_FILE)
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="CCTV configuration file not found")
+
+    # Reload if cache is empty or file changed
+    if not _cctv_cache["data"] or _cctv_cache["mtime"] != mtime:
+        logger.info("Loading CCTV data into memory cache")
+        _cctv_cache["data"] = _load_cctv_data_from_disk()
+        _cctv_cache["mtime"] = mtime
+    return _cctv_cache["data"]
+
 @app.get("/")
 def root():
     """Root endpoint"""
@@ -83,15 +105,13 @@ def root():
 
 @app.get("/cctv")
 def get_cctv_list():
-    with open(CCTV_FILE, "r") as f:
-        data = json.load(f)
+    data = get_cctv_data_cached()
     return data
 
 
 @app.get("/cctv/{cctv_id}")
 def get_cctv_detail(cctv_id: str):
-    with open(CCTV_FILE, "r") as f:
-        data = json.load(f)
+    data = get_cctv_data_cached()
     devices = data.get("devices", [])
     for c in devices:
         if c.get("id") == cctv_id:

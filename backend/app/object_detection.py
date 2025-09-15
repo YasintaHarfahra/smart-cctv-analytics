@@ -62,7 +62,7 @@ class MockDetector:
         return [MockResult()]
 
 class CCTVObjectDetector:
-    def __init__(self, model_path: str = 'yolov8n.pt'):
+    def __init__(self, model_path: str = 'best.pt'):
         """Initialize YOLO model for object detection"""
         self.detection_history = []
         self.object_counters = {}

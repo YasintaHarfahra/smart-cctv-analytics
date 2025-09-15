@@ -3,7 +3,12 @@
     <!-- Bagian Atas: Video + Accuracy -->
     <div class="flex flex-1 gap-4 mb-0">
       <!-- Video CCTV (3/4) -->
-      <button class="px-3 py-1 rounded-md top-4 left-4 shadow-md h-[6vh] absolute z-50 bg-white" @click="$router.back()">← Back</button>
+      <button 
+        class="px-3 py-1 rounded-md top-4 left-4 shadow-md h-[6vh] absolute z-50 bg-white" 
+        @click="goBack"
+      >
+        ← Back
+      </button>
       <div class="flex bg-black w-auto max-h-[65vh] rounded-lg overflow-hidden">
         <div class="aspect-video relative w-full h-full">
           <video ref="videoPlayer" id="cctv-player" class="w-full h-full object-contain" controls autoplay muted playsinline></video>
@@ -91,10 +96,11 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Hls from 'hls.js'
 
 const route = useRoute()
+const router = useRouter()
 const cctv = ref({})
 const videoPlayer = ref(null)
 const detectionCanvas = ref(null)
@@ -626,6 +632,21 @@ const formatTimestamp = (timestamp) => {
   const date = new Date(timestamp > 1000000000000 ? timestamp : timestamp * 1000)
   return date.toLocaleTimeString()
 }
+
+const goBack = () => {
+  // Navigate back to cctvlist with preserved query parameters
+  const query = { ...route.query };
+  
+  // Ensure we have the scroll position
+  if (!query.y) {
+    query.y = String(window.scrollY || 0);
+  }
+  
+  router.push({ 
+    name: 'cctvlist', 
+    query 
+  });
+};
 
 onMounted(async () => {
   try {
