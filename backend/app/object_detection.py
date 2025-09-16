@@ -83,7 +83,7 @@ class MockDetector:
         return [MockResult()]
     
 class CCTVObjectDetector:
-    def __init__(self, model_path: str = 'fixed.pt', frame_skip: int = 1, target_width: int = 640, buffer_grab_count: int = 1):
+    def __init__(self, model_path: str = 'yolov8m.pt', frame_skip: int = 1, target_width: int = 640, buffer_grab_count: int = 1):
         """Initialize YOLO model for object detection"""
         self.detection_history = []
         self.object_counters = {}
@@ -117,8 +117,9 @@ class CCTVObjectDetector:
         self.force_no_resize = True  # Force no resize at all - use original video size
         self.use_raw_coordinates = True  # Use raw coordinates without any scaling
         # Basic thresholds to reduce noisy boxes and improve stability
-        self.conf_threshold = 0.20
-        self.iou_threshold = 0.50
+        # Lower default conf to increase recall on low-light scenes
+        self.conf_threshold = 0.10
+        self.iou_threshold = 0.45
         self.allowed_labels = {"car", "bus", "truck", "motorcycle", "person", "bicycle"}
         # Virtual lines and crossing state
         # lines: Dict[camera_id, List[List[{x,y}]]], each inner list has 2 points
@@ -163,6 +164,54 @@ class CCTVObjectDetector:
                     logger.info("CUDA not available; using CPU")
         except Exception as e:
             logger.warning(f"Device configuration warning: {e}")
+    
+    # ===== Runtime tuning APIs =====
+    def set_conf_threshold(self, conf: float):
+        try:
+            self.conf_threshold = max(0.0, min(1.0, float(conf)))
+            logger.info(f"Confidence threshold set to {self.conf_threshold}")
+        except Exception as e:
+            logger.warning(f"Failed to set conf threshold: {e}")
+
+    def set_iou_threshold(self, iou: float):
+        try:
+            self.iou_threshold = max(0.0, min(1.0, float(iou)))
+            logger.info(f"IoU threshold set to {self.iou_threshold}")
+        except Exception as e:
+            logger.warning(f"Failed to set IoU threshold: {e}")
+
+    def set_allowed_labels(self, labels: List[str]):
+        try:
+            if isinstance(labels, list) and all(isinstance(x, str) for x in labels):
+                self.allowed_labels = {x.strip().lower() for x in labels if x and isinstance(x, str)}
+                logger.info(f"Allowed labels set: {sorted(list(self.allowed_labels))}")
+        except Exception as e:
+            logger.warning(f"Failed to set allowed labels: {e}")
+
+    def load_model(self, model_path: str):
+        global YOLO_AVAILABLE
+        try:
+            if not YOLO_AVAILABLE:
+                raise RuntimeError("YOLO not available")
+            m = YOLO(model_path)
+            self.model = m
+            # Re-apply device/half settings if needed
+            if torch is not None and torch.cuda.is_available():
+                self.device = 'cuda'
+                self.model.to(self.device)
+                try:
+                    if hasattr(self.model, 'model'):
+                        self.model.model.half()
+                        self.use_half = True
+                except Exception:
+                    pass
+            else:
+                self.device = 'cpu'
+            logger.info(f"Model hot-swapped to: {model_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load model '{model_path}': {e}")
+            return False
         
     async def process_stream(self, stream_url: str, websocket=None, camera_id: str = None):
         """Process CCTV stream and detect objects"""

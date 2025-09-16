@@ -43,18 +43,59 @@ app = FastAPI(title="Smart CCTV Analytics", version="1.0.0")
 # Zones/virtual lines management endpoints
 DB_AVAILABLE = True
 try:
-    from .database import get_db, CameraZoneModel
+    from .database import get_db, CameraZoneModel, DetectionSessionModel, Base
+    from .database import engine as _engine
     from sqlalchemy.orm import Session
     from fastapi import Depends
     from .schemas import CameraZoneCreate
+    # Create tables if they don't exist
+    try:
+        Base.metadata.create_all(bind=_engine)
+        logger.info("Database tables ensured (created if missing)")
+    except Exception as _e:
+        logger.warning(f"Failed to auto-create tables: {_e}")
 except Exception as e:
     DB_AVAILABLE = False
     logger.warning(f"Database not available: {e}. Zone endpoints will be disabled.")
 
+
+# Helper task: periodically persist live counts to the current session
+async def _periodic_update_session_counts(session_id: int, camera_id: str):
+    try:
+        if not DB_AVAILABLE:
+            return
+        from .database import get_db
+        from sqlalchemy import func
+        while True:
+            await asyncio.sleep(5)
+            try:
+                db = next(get_db())
+                try:
+                    row = db.query(DetectionSessionModel).filter(DetectionSessionModel.id == session_id).first()
+                    if not row:
+                        continue
+                    counts = detector.camera_id_to_counts.get(camera_id, {}) or {}
+                    row.counts = counts
+                    # Update ended_at to the current database time to reflect last upload time
+                    from sqlalchemy import func
+                    row.ended_at = db.query(func.now()).scalar()
+                    db.add(row)
+                    db.commit()
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.warning(f"Periodic session update failed (id={session_id} cam={camera_id}): {e}")
+    except asyncio.CancelledError:
+        # Task cancelled when session ends
+        pass
+    except Exception as e:
+        logger.warning(f"Periodic updater error: {e}")
+
 @app.get("/zones/{camera_id}")
 def get_zone(camera_id: str):
     if not DB_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Database not configured")
+        # Gracefully return an empty zone if DB isn't configured, to avoid frontend errors
+        return {"camera_id": camera_id, "points": [], "is_active": False}
     from fastapi import Depends  # local import to avoid import at startup
     from sqlalchemy.orm import Session
     db: Session = next(get_db())
@@ -380,6 +421,31 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
             
             logger.info(f"Found CCTV: {cctv.get('name', cctv_id)}")
             logger.info(f"Stream URL: {cctv.get('link')}")
+
+            # Buat session detection di DB (Supabase)
+            session_id = None
+            periodic_task = None
+            try:
+                if DB_AVAILABLE:
+                    from .database import get_db
+                    db = next(get_db())
+                    try:
+                        session_row = DetectionSessionModel(
+                            camera_id=cctv_id,
+                            camera_name=cctv.get('name') or cctv_id,
+                            counts={}
+                        )
+                        db.add(session_row)
+                        db.commit()
+                        db.refresh(session_row)
+                        session_id = session_row.id
+                        logger.info(f"Detection session started id={session_id} for camera {cctv_id}")
+                        # Mulai periodic updater agar counts tersimpan selama sesi berjalan
+                        periodic_task = asyncio.create_task(_periodic_update_session_counts(session_id, cctv_id))
+                    finally:
+                        db.close()
+            except Exception as s_err:
+                logger.warning(f"Failed to create detection session: {s_err}")
             
             # Resolve virtual line: prefer DB zone, fallback ke cctv.json line_coordinate
             line_points = []
@@ -497,6 +563,31 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
                         }))
                     except Exception as send_error:
                         logger.error(f"Failed to send error message: {send_error}")
+                finally:
+                    # Tutup session dengan menyimpan hasil counts terakhir
+                    try:
+                        if DB_AVAILABLE and session_id is not None:
+                            from .database import get_db
+                            db = next(get_db())
+                            try:
+                                row = db.query(DetectionSessionModel).filter(DetectionSessionModel.id == session_id).first()
+                                if row:
+                                    # Ambil counts dari detector untuk kamera ini
+                                    counts = detector.camera_id_to_counts.get(cctv_id, {}) or {}
+                                    row.counts = counts
+                                    # Set ended_at ke now() lewat db
+                                    from sqlalchemy import func
+                                    row.ended_at = db.query(func.now()).scalar()
+                                    db.add(row)
+                                    db.commit()
+                                    logger.info(f"Detection session closed id={session_id} for camera {cctv_id}")
+                            finally:
+                                db.close()
+                        # Hentikan periodic updater
+                        if periodic_task:
+                            periodic_task.cancel()
+                    except Exception as close_err:
+                        logger.warning(f"Failed to close detection session: {close_err}")
             else:
                 logger.info(f"Using mock detector for CCTV: {cctv_id}")
                 # Send mock detections with keep-alive
@@ -727,7 +818,11 @@ def update_detection_config(
     epic_coordinate_fix: bool = None,
     legendary_coordinate_fix: bool = None,
     force_no_resize: bool = None,
-    use_raw_coordinates: bool = None
+    use_raw_coordinates: bool = None,
+    conf_threshold: float = None,
+    iou_threshold: float = None,
+    labels: str = None,
+    model_path: str = None
 ):
     """Update detection configuration parameters"""
     if frame_skip is not None:
@@ -775,6 +870,19 @@ def update_detection_config(
     if use_raw_coordinates is not None:
         detector.use_raw_coordinates = bool(use_raw_coordinates)
     
+    if conf_threshold is not None:
+        detector.set_conf_threshold(conf_threshold)
+    if iou_threshold is not None:
+        detector.set_iou_threshold(iou_threshold)
+    if labels is not None:
+        try:
+            arr = [s.strip() for s in labels.split(',') if s.strip()]
+            detector.set_allowed_labels(arr)
+        except Exception:
+            pass
+    if model_path:
+        detector.load_model(model_path)
+
     return {
         "message": "Detection configuration updated",
         "config": {
@@ -799,7 +907,10 @@ def update_detection_config(
             "epic_coordinate_fix": detector.epic_coordinate_fix,
             "legendary_coordinate_fix": detector.legendary_coordinate_fix,
             "force_no_resize": detector.force_no_resize,
-            "use_raw_coordinates": detector.use_raw_coordinates
+            "use_raw_coordinates": detector.use_raw_coordinates,
+            "conf_threshold": detector.conf_threshold,
+            "iou_threshold": detector.iou_threshold,
+            "allowed_labels": sorted(list(getattr(detector, 'allowed_labels', [])))
         }
     }
 
