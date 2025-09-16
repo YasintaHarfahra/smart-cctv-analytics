@@ -6,5 +6,7 @@ dist
 .lib
 
 # Model files (too large for git)
-*.pt
-*.zip
+**/*.pt
+**/*.zip
+
+**/__pycache__
