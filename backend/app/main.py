@@ -9,6 +9,7 @@ from urllib.parse import urljoin, quote, urlparse
 import asyncio
 import time
 import sys
+from typing import List, Dict
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -39,6 +40,76 @@ except ImportError as e:
     detector = MockDetector()
 
 app = FastAPI(title="Smart CCTV Analytics", version="1.0.0")
+# Zones/virtual lines management endpoints
+DB_AVAILABLE = True
+try:
+    from .database import get_db, CameraZoneModel
+    from sqlalchemy.orm import Session
+    from fastapi import Depends
+    from .schemas import CameraZoneCreate
+except Exception as e:
+    DB_AVAILABLE = False
+    logger.warning(f"Database not available: {e}. Zone endpoints will be disabled.")
+
+@app.get("/zones/{camera_id}")
+def get_zone(camera_id: str):
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Database not configured")
+    from fastapi import Depends  # local import to avoid import at startup
+    from sqlalchemy.orm import Session
+    db: Session = next(get_db())
+    try:
+        zone = db.query(CameraZoneModel).filter(CameraZoneModel.camera_id == camera_id).first()
+        if not zone:
+            return {"camera_id": camera_id, "points": [], "is_active": False}
+        return zone.to_dict()
+    finally:
+        db.close()
+
+@app.post("/zones/{camera_id}")
+def set_zone(camera_id: str, payload: dict):
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Database not configured")
+    from sqlalchemy.orm import Session
+    db: Session = next(get_db())
+    try:
+        raw_points = payload.get("points", [])
+        points = [{"x": float(p.get("x")), "y": float(p.get("y"))} for p in raw_points if p is not None]
+        zone = db.query(CameraZoneModel).filter(CameraZoneModel.camera_id == camera_id).first()
+        if zone:
+            zone.points = points
+            zone.is_active = True
+        else:
+            zone = CameraZoneModel(camera_id=camera_id, points=points, is_active=True)
+            db.add(zone)
+        db.commit()
+        # Apply to detector immediately
+        try:
+            detector.set_virtual_line(camera_id, points)
+        except Exception:
+            pass
+        return zone.to_dict()
+    finally:
+        db.close()
+
+@app.delete("/zones/{camera_id}")
+def clear_zone(camera_id: str):
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Database not configured")
+    from sqlalchemy.orm import Session
+    db: Session = next(get_db())
+    try:
+        zone = db.query(CameraZoneModel).filter(CameraZoneModel.camera_id == camera_id).first()
+        if zone:
+            db.delete(zone)
+            db.commit()
+        try:
+            detector.set_virtual_line(camera_id, [])
+        except Exception:
+            pass
+        return {"camera_id": camera_id, "deleted": True}
+    finally:
+        db.close()
 
 # Add a simple test route first
 @app.get("/test-simple")
@@ -81,8 +152,40 @@ _cctv_cache = {
 }
 
 def _load_cctv_data_from_disk() -> dict:
-    with open(CCTV_FILE, "r") as f:
-        return json.load(f)
+    try:
+        with open(CCTV_FILE, "r", encoding="utf-8") as f:
+            text = f.read()
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as je:
+            logger.error(f"Failed to parse CCTV JSON: {je}")
+            # Provide short preview to help debugging
+            preview = text[:200].replace("\n", " ") if isinstance(text, str) else ""
+            raise HTTPException(status_code=500, detail=f"Invalid CCTV JSON format: {je}. Preview: {preview}")
+
+        # Accept either {"devices": [...]} or raw list [...]
+        if isinstance(data, list):
+            return {"devices": data}
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=500, detail="Invalid CCTV config: not a JSON object")
+        if "devices" not in data:
+            # Try to infer: if there is a top-level key like "data" or similar
+            for key in ("data", "items", "cameras"):
+                if isinstance(data.get(key), list):
+                    data = {"devices": data[key]}
+                    break
+        # Ensure devices exists as list
+        devices = data.get("devices", [])
+        if not isinstance(devices, list):
+            raise HTTPException(status_code=500, detail="Invalid CCTV config: 'devices' must be a list")
+        return {"devices": devices}
+    except HTTPException:
+        raise
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="CCTV configuration file not found")
+    except Exception as e:
+        logger.error(f"Unexpected error loading CCTV data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 def get_cctv_data_cached() -> dict:
     try:
@@ -105,18 +208,39 @@ def root():
 
 @app.get("/cctv")
 def get_cctv_list():
-    data = get_cctv_data_cached()
-    return data
+    try:
+        data = get_cctv_data_cached()
+        if not isinstance(data, dict):
+            logger.error("Invalid CCTV config format (not dict)")
+            return {"devices": []}
+        devices = data.get("devices", [])
+        if not isinstance(devices, list):
+            logger.error("Invalid CCTV config: 'devices' not list")
+            devices = []
+        return {"devices": devices}
+    except HTTPException as e:
+        logger.error(f"/cctv HTTPException: {e}")
+        return {"devices": []}
+    except Exception as e:
+        logger.error(f"/cctv error: {e}")
+        return {"devices": []}
 
 
 @app.get("/cctv/{cctv_id}")
 def get_cctv_detail(cctv_id: str):
-    data = get_cctv_data_cached()
-    devices = data.get("devices", [])
-    for c in devices:
-        if c.get("id") == cctv_id:
-            return c
-    raise HTTPException(status_code=404, detail="CCTV not found")
+    try:
+        data = get_cctv_data_cached()
+        devices = data.get("devices", []) if isinstance(data, dict) else []
+        for c in devices:
+            if c.get("id") == cctv_id:
+                return c
+        raise HTTPException(status_code=404, detail="CCTV not found")
+    except HTTPException as e:
+        logger.error(f"/cctv/{cctv_id} HTTPException: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"/cctv/{cctv_id} error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Health check endpoint
@@ -257,10 +381,91 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
             logger.info(f"Found CCTV: {cctv.get('name', cctv_id)}")
             logger.info(f"Stream URL: {cctv.get('link')}")
             
-            # Kirim info CCTV
+            # Resolve virtual line: prefer DB zone, fallback ke cctv.json line_coordinate
+            line_points = []
+            all_lines = []
+            try:
+                if DB_AVAILABLE:
+                    # Lazy import and session usage
+                    from .database import get_db, CameraZoneModel as _CZ
+                    db = next(get_db())
+                    try:
+                        zone = db.query(_CZ).filter(_CZ.camera_id == cctv_id).first()
+                        if zone and isinstance(zone.points, list):
+                            # Ambil satu garis saja
+                            if len(zone.points) >= 2 and isinstance(zone.points[0], dict):
+                                line_points = zone.points[:2]
+                            elif len(zone.points) > 0 and isinstance(zone.points[0], list):
+                                for ln in zone.points:
+                                    if isinstance(ln, list) and len(ln) >= 2 and isinstance(ln[0], dict):
+                                        line_points = ln[:2]
+                                        break
+                        # Apply single line to detector jika ada
+                        if line_points:
+                            try:
+                                detector.set_virtual_line(cctv_id, line_points)
+                            except Exception:
+                                pass
+                    finally:
+                        db.close()
+            except Exception as e:
+                logger.warning(f"Zone DB lookup failed for {cctv_id}: {e}")
+
+            # Fallback to config file attribute if no DB zone
+            if not line_points:
+                try:
+                    raw = cctv.get('line_coordinate')
+                    if isinstance(raw, str) and raw.strip():
+                        arr = json.loads(raw)
+                        if isinstance(arr, list) and len(arr) > 0:
+                            # Pilih kandidat terbaik: yang punya active:true, atau line_name mengandung 'count/hitung', jika tidak ada ambil pertama
+                            def to_points(item):
+                                return [
+                                    {"x": float(item["startX"]), "y": float(item["startY"])},
+                                    {"x": float(item["endX"]), "y": float(item["endY"])},
+                                ]
+                            # Build all valid lines
+                            all_lines = [to_points(it) for it in arr if isinstance(it, dict) and all(k in it for k in ("startX","startY","endX","endY"))]
+                            candidate = None
+                            # 1) active:true
+                            for it in arr:
+                                if isinstance(it, dict) and all(k in it for k in ("startX","startY","endX","endY")) and it.get("active") is True:
+                                    candidate = it
+                                    break
+                            # 2) line_name keyword
+                            if candidate is None:
+                                for it in arr:
+                                    if not isinstance(it, dict):
+                                        continue
+                                    name = str(it.get("line_name", "")).lower()
+                                    if any(key in name for key in ("count","hitung","main")) and all(k in it for k in ("startX","startY","endX","endY")):
+                                        candidate = it
+                                        break
+                            # 3) first valid
+                            if candidate is None:
+                                for it in arr:
+                                    if isinstance(it, dict) and all(k in it for k in ("startX","startY","endX","endY")):
+                                        candidate = it
+                                        break
+                            if candidate is not None:
+                                line_points = to_points(candidate)
+                            # Terapkan hanya satu garis ke detector
+                            if line_points:
+                                try:
+                                    detector.set_virtual_line(cctv_id, line_points)
+                                except Exception:
+                                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to parse line_coordinate for {cctv_id}: {e}")
+
+            # Kirim info CCTV termasuk line_points jika ada
+            cctv_with_line = dict(cctv)
+            if line_points:
+                cctv_with_line["line_points"] = line_points
+            # Jangan kirim all_lines agar hanya satu yang digambar di frontend
             cctv_info = json.dumps({
                 "type": "cctv_info",
-                "data": cctv
+                "data": cctv_with_line
             })
             logger.info(f"Sending CCTV info: {cctv_info}")
             
@@ -272,7 +477,7 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
             
             if DETECTOR_AVAILABLE:
                 detection_task = asyncio.create_task(
-                    detector.process_stream(cctv["link"], websocket)
+                    detector.process_stream(cctv["link"], websocket, camera_id=cctv_id)
                 )
                 logger.info(f"Detection task created for CCTV: {cctv_id}")
                 

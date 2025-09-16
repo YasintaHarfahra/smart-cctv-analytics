@@ -81,9 +81,9 @@ class MockDetector:
                 self.names = {0: 'person', 1: 'car', 2: 'truck'}
         
         return [MockResult()]
-
+    
 class CCTVObjectDetector:
-    def __init__(self, model_path: str = 'best.pt', frame_skip: int = 1, target_width: int = 640, buffer_grab_count: int = 1):
+    def __init__(self, model_path: str = 'fixed.pt', frame_skip: int = 1, target_width: int = 640, buffer_grab_count: int = 1):
         """Initialize YOLO model for object detection"""
         self.detection_history = []
         self.object_counters = {}
@@ -116,6 +116,16 @@ class CCTVObjectDetector:
         self.legendary_coordinate_fix = True  # Legendary coordinate fixing with mythical algorithms
         self.force_no_resize = True  # Force no resize at all - use original video size
         self.use_raw_coordinates = True  # Use raw coordinates without any scaling
+        # Basic thresholds to reduce noisy boxes and improve stability
+        self.conf_threshold = 0.20
+        self.iou_threshold = 0.50
+        self.allowed_labels = {"car", "bus", "truck", "motorcycle", "person", "bicycle"}
+        # Virtual lines and crossing state
+        # lines: Dict[camera_id, List[List[{x,y}]]], each inner list has 2 points
+        self.camera_id_to_lines: Dict[str, List[List[Dict[str, float]]]] = {}
+        self.camera_id_to_counts: Dict[str, Dict[str, int]] = {}
+        # track sides per line index: Dict[camera_id, Dict[line_idx, Dict[track_id, side]]]
+        self.camera_id_to_track_side: Dict[str, Dict[int, Dict[int, int]]] = {}
         
         if YOLO_AVAILABLE:
             try:
@@ -154,7 +164,7 @@ class CCTVObjectDetector:
         except Exception as e:
             logger.warning(f"Device configuration warning: {e}")
         
-    async def process_stream(self, stream_url: str, websocket=None):
+    async def process_stream(self, stream_url: str, websocket=None, camera_id: str = None):
         """Process CCTV stream and detect objects"""
         self.is_running = True
         logger.info(f"Starting stream processing: {stream_url}")
@@ -231,10 +241,14 @@ class CCTVObjectDetector:
                             persist=True,
                             tracker="bytetrack.yaml",
                             verbose=False,
-                            device=self.device
+                            device=self.device,
+                            conf=self.conf_threshold,
+                            iou=self.iou_threshold
                         )
                         # Process detection results
                         detections = self._process_detections(results[0], frame)
+                        # Filter allowed labels to reduce clutter
+                        detections = [d for d in detections if (d.label.lower() in self.allowed_labels and d.confidence >= self.conf_threshold)]
 
                         # Debug logging for frame and detection info
                         if self.debug_logging and len(detections) > 0:
@@ -247,12 +261,15 @@ class CCTVObjectDetector:
                         if self.smoothing_enabled:
                             detections = self._smooth_detections(detections)
                         
-                        # Update counters
+                        # Update per-frame presence counters
                         self._update_counters(detections)
+                        # Update crossing counters if virtual line configured
+                        if camera_id:
+                            self._update_crossings_for_camera(camera_id, detections)
                         
                         # Send results via WebSocket if available
                         if websocket:
-                            await self._send_detection_results(websocket, detections, frame)
+                            await self._send_detection_results(websocket, detections, frame, camera_id)
                             
                     except Exception as e:
                         logger.error(f"Detection error on frame {frame_count}: {e}")
@@ -447,7 +464,94 @@ class CCTVObjectDetector:
                 self.object_counters[label] = 0
             self.object_counters[label] = count
     
-    async def _send_detection_results(self, websocket, detections: List[DetectionResult], frame):
+    def set_virtual_line(self, camera_id: str, points: List[Dict[str, float]]):
+        """Backward-compatible: set a single virtual line with two points."""
+        if not points or len(points) < 2:
+            self.camera_id_to_lines.pop(camera_id, None)
+            logger.info(f"Virtual lines cleared for camera {camera_id}")
+            return
+        p0 = {'x': float(points[0]['x']), 'y': float(points[0]['y'])}
+        p1 = {'x': float(points[1]['x']), 'y': float(points[1]['y'])}
+        self.set_virtual_lines(camera_id, [[p0, p1]])
+
+    def set_virtual_lines(self, camera_id: str, lines: List[List[Dict[str, float]]]):
+        """Configure multiple virtual lines for a camera."""
+        try:
+            valid_lines: List[List[Dict[str, float]]] = []
+            if lines:
+                for line in lines:
+                    if isinstance(line, list) and len(line) >= 2:
+                        p0 = {'x': float(line[0]['x']), 'y': float(line[0]['y'])}
+                        p1 = {'x': float(line[1]['x']), 'y': float(line[1]['y'])}
+                        valid_lines.append([p0, p1])
+            if not valid_lines:
+                self.camera_id_to_lines.pop(camera_id, None)
+                logger.info(f"Virtual lines cleared for camera {camera_id}")
+                return
+            self.camera_id_to_lines[camera_id] = valid_lines
+            self.camera_id_to_counts.setdefault(camera_id, {})
+            self.camera_id_to_track_side[camera_id] = {}
+            logger.info(f"Set {len(valid_lines)} virtual line(s) for camera {camera_id}")
+        except Exception as e:
+            logger.error(f"Failed to set virtual lines for {camera_id}: {e}")
+
+    def _update_crossings_for_camera(self, camera_id: str, detections: List[DetectionResult]):
+        """Update crossing counts for a given camera based on virtual line and tracked objects."""
+        if camera_id not in self.camera_id_to_lines:
+            return
+        lines = self.camera_id_to_lines.get(camera_id)
+        if not lines:
+            return
+        # Prepare per-line track side maps
+        per_line_track_sides = self.camera_id_to_track_side.setdefault(camera_id, {})
+        counts = self.camera_id_to_counts.setdefault(camera_id, {})
+
+        # Lazy imports to avoid circulars
+        try:
+            from .database import SessionLocal
+            from .crud import create_analytics_data
+            from .schemas import AnalyticsDataCreate
+        except Exception:
+            SessionLocal = None
+            create_analytics_data = None
+            AnalyticsDataCreate = None
+
+        for det in detections:
+            if det.track_id is None or det.track_id < 0:
+                continue
+            cx = det.bbox[0] + det.bbox[2] * 0.5
+            cy = det.bbox[1] + det.bbox[3] * 0.5
+            for idx, line in enumerate(lines):
+                x1, y1 = line[0]['x'], line[0]['y']
+                x2, y2 = line[1]['x'], line[1]['y']
+                side_map = per_line_track_sides.setdefault(idx, {})
+                side = 0
+                try:
+                    side_val = (x2 - x1) * (cy - y1) - (y2 - y1) * (cx - x1)
+                    side = 1 if side_val > 0 else (-1 if side_val < 0 else 0)
+                except Exception:
+                    side = 0
+                prev_side = side_map.get(det.track_id)
+                if prev_side is None:
+                    side_map[det.track_id] = side
+                    continue
+                if side == 0 or prev_side == 0:
+                    side_map[det.track_id] = side or prev_side
+                    continue
+                if side != prev_side:
+                    label = det.label
+                    counts[label] = counts.get(label, 0) + 1
+                    side_map[det.track_id] = side
+                    if SessionLocal and create_analytics_data and AnalyticsDataCreate:
+                        try:
+                            db = SessionLocal()
+                            payload = AnalyticsDataCreate(object_type=label, count=1, area_name=camera_id)
+                            create_analytics_data(db, payload)
+                            db.close()
+                        except Exception as e:
+                            logger.warning(f"Failed to persist crossing analytics for {camera_id}: {e}")
+
+    async def _send_detection_results(self, websocket, detections: List[DetectionResult], frame, camera_id: str = None):
         """Send detection results via WebSocket"""
         try:
             # Prepare data to send
@@ -481,6 +585,8 @@ class CCTVObjectDetector:
                 'timestamp': time.time(),
                 'objects': [det.to_dict() for det in detections],
                 'counters': self.object_counters,
+                'crossing_counts': (self.camera_id_to_counts.get(camera_id, {}) if camera_id else {}),
+                'camera_id': camera_id,
                 'total_objects': len(detections),
                 'frame_size': [int(fw), int(fh)],  # Current processed frame size
                 'original_frame_size': self.original_frame_size,  # Original video size

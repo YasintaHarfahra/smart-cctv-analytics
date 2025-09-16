@@ -21,24 +21,23 @@
         </div>
       </div>
 
-      <!-- Average Detection Accuracy (1/4) -->
-      <div class="flex-[1] max-h-[65vh] w-auto bg-white p-4 rounded-lg border overflow-y-auto">
-        <h3 class="text-lg font-bold mb-3">Average Detection Accuracy</h3>
+      <!-- Vehicle Counts (1/4) -->
+      <div class="flex-[1] max-h-[65vh] w-auto bg-white p-4 rounded-lg border overflow-y-auto relative">
+        <h3 class="text-lg font-bold mb-3">Vehicle Counts</h3>
         <button @click="toggleDetection" :class="[ 'px-2 py-1 text-sm rounded absolute right-10 top-6 font-medium', isDetectionActive ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-green-500 text-white hover:bg-green-600' ]" > {{ isDetectionActive ? 'Stop Detection' : 'Start Detection' }} </button>
-        <div class="space-y-3">
-          <div v-for="(accuracy, vehicleType) in staticAverageAccuracy" :key="vehicleType" 
+        <div class="space-y-3 mb-4">
+          <div v-for="(count, vehicleType) in crossingCounts" :key="vehicleType" 
               class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
             <div class="flex items-center gap-3">
               <span class="w-4 h-4 rounded-full" :style="{backgroundColor: getVehicleColor(vehicleType)}"></span>
               <span class="font-medium capitalize">{{ vehicleType }}</span>
             </div>
             <div class="text-right">
-              <div class="text-lg font-bold" :class="getAccuracyColorClass(accuracy)">
-                {{ accuracy.toFixed(1) }}%
-              </div>
-              <div class="text-xs text-gray-500">average confidence</div>
+              <div class="text-lg font-bold">{{ count }}</div>
+              <div class="text-xs text-gray-500">total crossed</div>
             </div>
           </div>
+          <div v-if="Object.keys(crossingCounts).length === 0" class="text-sm text-gray-500">Belum ada hitungan.</div>
         </div>
       </div>
     </div>
@@ -111,6 +110,10 @@ const isDetectionActive = ref(false)
 const wsStatus = ref('disconnected')
 const detectedObjects = ref([])
 const objectCounters = ref({})
+const crossingCounts = ref({})
+const isEditingLine = ref(false)
+const virtualLine = ref([])
+const allLines = ref([])
 const showStats = ref(false)
 let ws = null
 
@@ -299,7 +302,31 @@ const loadAndPlayVideo = async (id) => {
         debug: false,
         enableWorker: true,
         lowLatencyMode: true,
-        backBufferLength: 90,
+
+        // Network tolerances
+        manifestLoadingTimeOut: 30000,
+        levelLoadingTimeOut: 30000,
+        fragLoadingTimeOut: 30000,
+        manifestLoadingMaxRetry: 8,
+        levelLoadingMaxRetry: 8,
+        fragLoadingMaxRetry: 8,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingRetryDelay: 1000,
+        fragLoadingRetryDelay: 1000,
+
+        // Buffer & gap handling
+        maxBufferLength: 6,
+        maxMaxBufferLength: 30,
+        maxBufferHole: 2,
+        maxFragLookUpTolerance: 0.5,
+        jumpLargeGaps: true,
+        nudgeOffset: 0.4,
+        nudgeMaxRetry: 10,
+
+        // Live sync
+        liveSyncDurationCount: 4,
+        liveMaxLatencyDurationCount: 10,
+        backBufferLength: 60,
         fetchSetup: (context, init) => {
           try {
             const originalUrl = String(context.url || '')
@@ -345,6 +372,43 @@ const loadAndPlayVideo = async (id) => {
         try { hls.loadSource(url) } catch (e) { console.warn('Early loadSource failed', e) }
 
         hls.attachMedia(video);
+        // Optional: manual start at live edge after manifest
+        try { hls.autoStartLoad = false } catch(e) {}
+
+        // setelah hls.attachMedia(video)
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          console.error('HLS Error:', data);
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                hls.recoverMediaError();
+                break;
+              default:
+                hls.destroy();
+                break;
+            }
+          } else {
+            // kalau bukan fatal (bufferStalledError dll.) coba startLoad & play ulang
+            if (data.details === 'bufferStalledError') {
+              try { hls.startLoad(); } catch(e) {}
+              try { video.play().catch(()=>{}); } catch(e) {}
+              // “nudge” currentTime supaya tidak macet
+              try {
+                const b = video.buffered;
+                if (b.length > 0) {
+                  const end = b.end(b.length - 1);
+                  if (end - video.currentTime < 1) {
+                    video.currentTime = end - 0.5;
+                  }
+                }
+              } catch(e) {}
+            }
+          }
+        });
+
         
         hls.on(Hls.Events.MEDIA_ATTACHED, () => {
           console.log("Media attached, ensuring source loaded...");
@@ -353,6 +417,8 @@ const loadAndPlayVideo = async (id) => {
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           console.log("Manifest parsed, starting playback...");
+          try { hls.currentLevel = 0 } catch(e) {}
+          try { hls.startLoad(-1) } catch(e) {}
           video.muted = true
           video.autoplay = true
           video.playsInline = true
@@ -376,12 +442,65 @@ const loadAndPlayVideo = async (id) => {
             });
         });
 
+        const tryNudge = () => {
+          try {
+            const ct = video.currentTime
+            const b = video.buffered
+            if (!b || b.length === 0) return
+            const last = b.length - 1
+            const start = b.start(0)
+            const end = b.end(last)
+            // Jika nyaris ke ujung buffer, loncat sedikit agar decoding lanjut
+            if (end - ct < 1) {
+              video.currentTime = Math.max(ct, end - 0.5)
+            } else if (ct < start) {
+              video.currentTime = start + 0.1
+            }
+          } catch (e) {}
+        }
+
         hls.on(Hls.Events.ERROR, (event, data) => {
           console.error('HLS Error:', data);
-          if (data.fatal) {
-            reject(new Error('Fatal HLS error'));
+          if (!data.fatal) {
+            if (data.details === 'bufferStalledError' || data.details === 'fragLoadTimeOut') {
+              try { hls.startLoad() } catch(e) {}
+              try { video.play().catch(()=>{}) } catch(e) {}
+              tryNudge()
+            }
+            return
+          }
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              try { hls.startLoad() } catch(e) {}
+              break
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              try { hls.recoverMediaError() } catch(e) {}
+              tryNudge()
+              break
+            default:
+              reject(new Error('Fatal HLS error'))
           }
         });
+
+        // Watchdog: periodically ensure we are near buffered range
+        try {
+          if (window._hlsStallWatch) clearInterval(window._hlsStallWatch)
+          window._hlsStallWatch = setInterval(() => {
+            try {
+              if (!video || video.paused) return
+              const rs = video.readyState
+              const b = video.buffered
+              if (!b || b.length === 0) return
+              const last = b.length - 1
+              const end = b.end(last)
+              const ct = video.currentTime
+              // if near end or readyState low, nudge to keep playing
+              if (end - ct < 0.7 || rs < 3) {
+                video.currentTime = Math.max(ct, end - 0.5)
+              }
+            } catch(e) { /* ignore */ }
+          }, 2000)
+        } catch(e) {}
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = url;
@@ -474,6 +593,26 @@ const handleDetectionMessage = (data) => {
       
     case 'cctv_info':
       console.log('CCTV info received:', data.data)
+      cctv.value = data.data || {}
+      // Prefer single line sent by backend
+      if (cctv.value && Array.isArray(cctv.value.line_points) && cctv.value.line_points.length >= 2) {
+        virtualLine.value = cctv.value.line_points.slice(0,2)
+        allLines.value = []
+      } else {
+        fetch(`/api/zones/${route.params.id}`)
+          .then(r => r.json())
+          .then(z => {
+            if (z && Array.isArray(z.points) && z.points.length >= 2) {
+              if (Array.isArray(z.points[0])) {
+                const first = z.points.find(ln => Array.isArray(ln) && ln.length >= 2)
+                if (first) virtualLine.value = first.slice(0,2)
+              } else {
+                virtualLine.value = z.points.slice(0,2)
+              }
+            }
+          })
+          .catch(() => {})
+      }
       break
       
          case 'detection_results':
@@ -482,6 +621,7 @@ const handleDetectionMessage = (data) => {
        
        detectedObjects.value = data.objects
        objectCounters.value = data.counters
+       crossingCounts.value = data.crossing_counts || {}
        
        // Update target detections and render immediately
        targetDetections.value = data.objects
@@ -517,13 +657,7 @@ const renderDetections = (objects) => {
   
   const ctx = canvas.getContext('2d')
   
-  // Performance optimization: only clear if objects changed
-  if (objects.length === 0) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    return
-  }
-  
-  // Clear canvas efficiently
+  // Selalu bersihkan dan gambar ulang (agar garis tetap tampil walau objek 0)
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   
   // Get video dimensions
@@ -542,6 +676,24 @@ const renderDetections = (objects) => {
   
   // Batch rendering for better performance
   ctx.save()
+  
+  // Draw all virtual lines if exist
+  const linesToDraw = (virtualLine.value.length === 2 ? [virtualLine.value] : [])
+  for (const line of linesToDraw) {
+    if (!Array.isArray(line) || line.length < 2) continue
+    const p0 = line[0]
+    const p1 = line[1]
+    // Draw strictly horizontal line across full frame at the average Y
+    const y = (p0.y + p1.y) * 0.5
+    const xLeft = 0
+    const xRight = videoWidth
+    ctx.strokeStyle = '#00FFFF'
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.moveTo(xLeft * (canvasWidth / videoWidth), y * (canvasHeight / videoHeight))
+    ctx.lineTo(xRight * (canvasWidth / videoWidth), y * (canvasHeight / videoHeight))
+    ctx.stroke()
+  }
   
   objects.forEach((obj, index) => {
     const [x, y, w, h] = obj.bbox
@@ -574,10 +726,12 @@ const renderDetections = (objects) => {
     ctx.font = 'bold 12px Arial'
     ctx.fillText(labelText, scaledX + 5, scaledY - 5)
     
-    // Add subtle confidence indicator
-    ctx.fillStyle = obj.color
-    ctx.globalAlpha = 0.2
-    ctx.fillRect(scaledX, scaledY, scaledW, scaledH)
+    // Optional: subtle confidence indicator (disabled to keep view clean)
+    // If needed later, ensure to reset globalAlpha back to 1 after fill
+    // ctx.fillStyle = obj.color
+    // ctx.globalAlpha = 0.15
+    // ctx.fillRect(scaledX, scaledY, scaledW, scaledH)
+    ctx.globalAlpha = 1
   })
   
   ctx.restore()
@@ -661,6 +815,23 @@ onMounted(async () => {
     
     // Initial canvas resize
     nextTick(() => resizeCanvas())
+
+    // Setup click handler for drawing line
+    const canvas = detectionCanvas.value
+    const video = videoPlayer.value
+    if (canvas && video) {
+      canvas.addEventListener('click', (e) => {
+        if (!isEditingLine.value) return
+        const rect = canvas.getBoundingClientRect()
+        const px = e.clientX - rect.left
+        const py = e.clientY - rect.top
+        // Map from canvas to video pixel space
+        const vx = (px / canvas.width) * (video.videoWidth || 640)
+        const vy = (py / canvas.height) * (video.videoHeight || 360)
+        if (virtualLine.value.length >= 2) virtualLine.value = []
+        virtualLine.value.push({ x: vx, y: vy })
+      })
+    }
   } catch (error) {
     console.error("Failed to initialize video:", error);
   }
@@ -706,4 +877,31 @@ watch(() => route.params.id, async (newId, oldId) => {
     }
   }
 });
+</script>
+<script>
+export default {
+  methods: {
+    startLineEdit() {
+      this.$.setupState.isEditingLine = true
+    },
+    async saveLine() {
+      this.$.setupState.isEditingLine = false
+      const points = this.$.setupState.virtualLine
+      if (!Array.isArray(points) || points.length < 2) return
+      try {
+        await fetch(`/api/zones/${this.$route.params.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ camera_id: this.$route.params.id, points })
+        })
+      } catch (e) {
+        console.warn('Failed to save line', e)
+      }
+    },
+    clearLine() {
+      this.$.setupState.virtualLine = []
+      fetch(`/api/zones/${this.$route.params.id}`, { method: 'DELETE' }).catch(()=>{})
+    }
+  }
+}
 </script>
