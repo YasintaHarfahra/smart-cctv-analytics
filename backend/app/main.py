@@ -36,7 +36,7 @@ except ImportError as e:
             return {"error": "Object detection not available"}
         def process_stream(self, url, websocket):
             return asyncio.sleep(1)
-    
+
     detector = MockDetector()
 
 app = FastAPI(title="Smart CCTV Analytics", version="1.0.0")
@@ -163,6 +163,9 @@ origins = [
     "http://localhost:3001",
     "http://localhost:3002",
     "http://localhost:3003",
+    "http://frontend:3001",
+    "http://frontend:3002",
+    "http://frontend:3003",
 ]
 
 app.add_middleware(
@@ -324,11 +327,11 @@ def debug_websocket():
 async def websocket_test(websocket: WebSocket):
     """Simple WebSocket test endpoint"""
     logger.info("=== WebSocket test connection attempt ===")
-    
+
     try:
         await websocket.accept()
         logger.info("WebSocket test accepted successfully")
-        
+
         # Send test message
         await websocket.send_text(json.dumps({
             "type": "test",
@@ -336,7 +339,7 @@ async def websocket_test(websocket: WebSocket):
             "timestamp": time.time()
         }))
         logger.info("Test message sent successfully")
-        
+
         # Keep connection alive for 10 seconds
         for i in range(10):
             await asyncio.sleep(1)
@@ -350,14 +353,14 @@ async def websocket_test(websocket: WebSocket):
             except Exception as e:
                 logger.error(f"Failed to send heartbeat {i + 1}: {e}")
                 break
-        
+
         logger.info("WebSocket test completed successfully")
-        
+
     except WebSocketDisconnect as disconnect_error:
         logger.info(f"WebSocket test disconnected: {disconnect_error.code}")
     except Exception as e:
         logger.error(f"WebSocket test error: {e}")
-    
+
     logger.info("=== WebSocket test handler completed ===")
 
 
@@ -365,12 +368,12 @@ async def websocket_test(websocket: WebSocket):
 @app.websocket("/ws/detection/{cctv_id}")
 async def websocket_detection(websocket: WebSocket, cctv_id: str):
     logger.info(f"=== WebSocket connection attempt for CCTV: {cctv_id} ===")
-    
+
     try:
         # Accept connection
         await websocket.accept()
         logger.info(f"WebSocket accepted for CCTV: {cctv_id}")
-        
+
         # Test connection dengan ping
         try:
             ping_message = json.dumps({
@@ -379,18 +382,18 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
                 "timestamp": time.time()
             })
             logger.info(f"Sending ping message: {ping_message}")
-            
+
             await websocket.send_text(ping_message)
             logger.info(f"Ping sent successfully to CCTV: {cctv_id}")
-            
+
         except Exception as ping_error:
             logger.error(f"Failed to send ping to CCTV {cctv_id}: {ping_error}")
             return
-        
+
         # Ambil data CCTV
         try:
             logger.info(f"Reading CCTV file: {CCTV_FILE}")
-            
+
             if not os.path.exists(CCTV_FILE):
                 logger.error(f"CCTV file not found: {CCTV_FILE}")
                 await websocket.send_text(json.dumps({
@@ -398,19 +401,19 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
                     "message": "CCTV configuration file not found"
                 }))
                 return
-            
+
             with open(CCTV_FILE, "r") as f:
                 data = json.load(f)
-            
+
             devices = data.get("devices", [])
             logger.info(f"Found {len(devices)} devices in CCTV file")
-            
+
             cctv = None
             for c in devices:
                 if c.get("id") == cctv_id:
                     cctv = c
                     break
-            
+
             if not cctv or not cctv.get("link"):
                 logger.error(f"CCTV not found or no stream URL for ID: {cctv_id}")
                 await websocket.send_text(json.dumps({
@@ -418,7 +421,7 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
                     "message": "CCTV not found or no stream URL"
                 }))
                 return
-            
+
             logger.info(f"Found CCTV: {cctv.get('name', cctv_id)}")
             logger.info(f"Stream URL: {cctv.get('link')}")
 
@@ -446,7 +449,7 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
                         db.close()
             except Exception as s_err:
                 logger.warning(f"Failed to create detection session: {s_err}")
-            
+
             # Resolve virtual line: prefer DB zone, fallback ke cctv.json line_coordinate
             line_points = []
             all_lines = []
@@ -534,19 +537,19 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
                 "data": cctv_with_line
             })
             logger.info(f"Sending CCTV info: {cctv_info}")
-            
+
             await websocket.send_text(cctv_info)
             logger.info(f"CCTV info sent for: {cctv_id}")
-            
+
             # Mulai object detection dalam background task
             logger.info(f"Creating detection task for CCTV: {cctv_id}")
-            
+
             if DETECTOR_AVAILABLE:
                 detection_task = asyncio.create_task(
                     detector.process_stream(cctv["link"], websocket, camera_id=cctv_id)
                 )
                 logger.info(f"Detection task created for CCTV: {cctv_id}")
-                
+
                 # Tunggu task selesai atau WebSocket disconnect
                 try:
                     logger.info(f"Waiting for detection task to complete...")
@@ -594,7 +597,7 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
                 while True:
                     try:
                         await asyncio.sleep(2)  # Send every 2 seconds
-                        
+
                         # Send keep-alive ping
                         try:
                             await websocket.send_text(json.dumps({
@@ -605,7 +608,7 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
                         except Exception as ping_error:
                             logger.error(f"Keep-alive ping failed: {ping_error}")
                             break
-                        
+
                         # Send mock detection data
                         mock_data = {
                             "type": "detection_results",
@@ -625,11 +628,11 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
                         }
                         await websocket.send_text(json.dumps(mock_data))
                         logger.info(f"Mock detection sent for CCTV: {cctv_id}")
-                        
+
                     except Exception as e:
                         logger.error(f"Failed to send mock detection: {e}")
                         break
-            
+
         except FileNotFoundError as file_error:
             logger.error(f"CCTV file not found: {file_error}")
             await websocket.send_text(json.dumps({
@@ -648,7 +651,7 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
                 "type": "error",
                 "message": f"Error reading CCTV data: {str(cctv_error)}"
             }))
-        
+
     except WebSocketDisconnect as disconnect_error:
         logger.info(f"WebSocket disconnected for CCTV: {cctv_id}")
         logger.info(f"Disconnect code: {disconnect_error.code}")
@@ -664,7 +667,7 @@ async def websocket_detection(websocket: WebSocket, cctv_id: str):
         except:
             pass  # WebSocket mungkin sudah closed
         detector.stop()
-    
+
     logger.info(f"=== WebSocket handler completed for CCTV: {cctv_id} ===")
 
 
@@ -869,7 +872,7 @@ def update_detection_config(
         detector.force_no_resize = bool(force_no_resize)
     if use_raw_coordinates is not None:
         detector.use_raw_coordinates = bool(use_raw_coordinates)
-    
+
     if conf_threshold is not None:
         detector.set_conf_threshold(conf_threshold)
     if iou_threshold is not None:
