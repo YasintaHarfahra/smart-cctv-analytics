@@ -57,3 +57,24 @@ class CameraZoneModel(Base):
             "points": self.points,
             "is_active": self.is_active
         }
+
+# Session penyimpanan hasil counting per run
+class DetectionSessionModel(Base):
+    __tablename__ = "detection_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    camera_id = Column(String, index=True)
+    camera_name = Column(String)
+    started_at = Column(DateTime, server_default=text('now()'))
+    ended_at = Column(DateTime, nullable=True)
+    counts = Column(JSONB)  # contoh: {"car": 10, "motorcycle": 5}
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "camera_id": self.camera_id,
+            "camera_name": self.camera_name,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+            "counts": self.counts or {},
+        }

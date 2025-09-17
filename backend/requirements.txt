@@ -8,3 +8,5 @@ torch
 torchvision
 numpy
 Pillow
+sqlalchemy
+psycopg2-binary
