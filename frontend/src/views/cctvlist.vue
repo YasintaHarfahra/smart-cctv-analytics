@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch, nextTick, onUnmounted } from "vue";
 import axios from "axios";
 import { useRouter, useRoute } from "vue-router";
+import bgImage from '../assets/bg.png'
 
 const cctvs = ref([]);
 const isLoading = ref(false);
@@ -200,38 +201,41 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-    <!-- Modern Header Section with Gradient -->
-    <div class="relative overflow-hidden">
+  <div class="min-h-screen bg-slate-50">
+    <!-- Header Section -->
+    <div class="relative overflow-hidden min-h-screen">
       <!-- Background Pattern -->
-      <div class="absolute inset-0 bg-gradient-to-r from-sky-600/80 via-indigo-600/80 to-violet-600/80 opacity-80"></div>
+      <div class="absolute inset-0 bg-cover bg-center opacity-80"
+      :style="{ backgroundImage: `url(${bgImage})` }"></div>
+      <div class="absolute inset-0 bg-gradient-to-b from-sky-600/80 via-indigo-600/80 to-slate-50 opacity-100"></div>
       <div class="absolute inset-0 bg-[radial-gradient(circle_at_20px_20px,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[length:40px_40px] opacity-10"></div>
       
       <!-- Header Content -->
-      <div class="relative z-10">
+      <div class="relative z-10 bottom-0">
         <div class="container mx-auto px-4 py-4">
-          <div class="bg-white/15 backdrop-blur-md border border-white/30 rounded-2xl p-3 lg:p-4 shadow-[0_6px_24px_rgba(0,0,0,0.12)]">
-            <!-- Title and Icon Section -->
+          <!-- Title and Icon Section -->
+          <div class="flex justify-center mb-36 mt-48">
             <div class="flex items-center gap-3">
-              <div class="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/30 flex-shrink-0">
-                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              <div class="w-40 h-40 bg-white/20 backdrop-blur-sm rounded-3xl flex items-center justify-center border border-white/30 flex-shrink-0">
+                <svg class="w-32 h-32 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" 
+                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
               </div>
               <div class="min-w-0 flex-1">
-                <h1 class="text-xl lg:text-2xl font-bold text-white leading-tight">
-                  Smart CCTV Analytics
+                <h1 class="text-xl lg:text-6xl font-bold text-white leading-tight">
+                  Smart CCTV <br><span class="font-normal text-5xl">Analytics</span>
                 </h1>
-                <p class="text-white/90 text-sm lg:text-base font-medium leading-relaxed">
+                <p class="text-white/90 text-sm mt-4 lg:text-base font-light leading-relaxed">
                   Monitor dan kelola semua kamera CCTV dengan teknologi AI
                 </p>
               </div>
             </div>
-
-            <div class="h-px bg-white/10 my-2 lg:my-3"></div>
+          </div>
+          <div class="px-10 py-3 lg:py-4">
             
             <!-- Stats and Actions Row -->
-            <div class="flex flex-col lg:flex-row gap-3 lg:gap-4">
+            <div class="flex flex-col lg:flex-row mb-6 gap-3 lg:gap-4">
               <!-- Stats Cards -->
               <div class="flex-1">
                 <div class="grid grid-cols-3 gap-2 lg:gap-3">
@@ -249,27 +253,48 @@ onUnmounted(() => {
                   </div>
                 </div>
               </div>
-              
-              <!-- Quick Actions -->
-              <div class="lg:w-auto lg:flex-shrink-0">
-                <div class="text-center lg:text-right">
-                  <div class="text-white/80 text-xs font-medium mb-1">Quick Actions</div>
-                  <div class="flex flex-col sm:flex-row gap-1 lg:gap-2">
-                    <button class="btn-modern px-2 lg:px-3 py-1.5 lg:py-2 bg-white/15 hover:bg-white/25 backdrop-blur-md rounded-lg border border-white/30 text-white font-medium text-xs">
-                      <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                      </svg>
-                      Add CCTV
-                    </button>
-                    <button class="btn-modern px-2 lg:px-3 py-1.5 lg:py-2 bg-white/15 hover:bg-white/25 backdrop-blur-md rounded-lg border border-white/30 text-white font-medium text-xs">
-                      <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      Settings
-                    </button>
+            </div>
+            <!-- Filters Section -->
+            <div class="relative z-30 lg:-mt-2">
+              <div class="container mx-auto">
+                  <div class="flex flex-col lg:flex-row gap-3 lg:gap-4">
+                    <!-- Search Input -->
+                    <div class="flex-1 min-w-0">
+                      <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-2 lg:pl-3 flex items-center pointer-events-none">
+                          <svg class="h-3 lg:h-4 w-3 lg:w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                        </div>
+                        <input
+                          v-model="searchQuery"
+                          type="text"
+                          placeholder="Cari berdasarkan lokasi, tipe kamera, atau kategori..."
+                          class="block w-full pl-7 lg:pl-10 pr-2 lg:pr-3 py-2 lg:py-3 border border-gray-200 bg-gray-50/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 text-gray-900 placeholder-gray-500 text-xs lg:text-sm"
+                        />
+                      </div>
+                    </div>
+                    
+                    <!-- Category Filter -->
+                    <div class="w-full lg:w-48 flex-shrink-0">
+                      <div class="relative">
+                        <select
+                          v-model="selectedCategory"
+                          class="block w-full px-2 lg:px-3 py-2 lg:py-3 border border-gray-200 bg-gray-50/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 text-gray-900 appearance-none cursor-pointer text-xs lg:text-sm"
+                        >
+                          <option value="all">Semua Kategori</option>
+                          <option v-for="category in uniqueCategories" :key="category" :value="category">
+                            {{ category }}
+                          </option>
+                        </select>
+                        <div class="absolute inset-y-0 right-0 flex items-center pr-2 lg:pr-3 pointer-events-none">
+                          <svg class="h-3 lg:h-4 w-3 lg:w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
               </div>
             </div>
           </div>
@@ -281,56 +306,8 @@ onUnmounted(() => {
       <div class="absolute bottom-0 left-0 w-20 lg:w-32 h-20 lg:h-32 bg-gradient-to-tr from-purple-400/20 to-transparent rounded-full blur-lg lg:blur-xl animate-float" style="animation-delay: -3s;"></div>
     </div>
 
-    <!-- Modern Filters Section -->
-    <div class="relative z-30 -mt-4 lg:-mt-2">
-      <div class="container mx-auto px-4">
-        <div class="bg-white/80 backdrop-blur-xl rounded-xl shadow-xl border border-white/30 p-3 lg:p-4">
-          <div class="flex flex-col lg:flex-row gap-3 lg:gap-4">
-            <!-- Search Input with Modern Design -->
-            <div class="flex-1 min-w-0">
-              <label class="block text-xs font-semibold text-gray-700 mb-1 lg:mb-2">Cari CCTV</label>
-              <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-2 lg:pl-3 flex items-center pointer-events-none">
-                  <svg class="h-3 lg:h-4 w-3 lg:w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                <input
-                  v-model="searchQuery"
-                  type="text"
-                  placeholder="Cari berdasarkan lokasi, tipe kamera, atau kategori..."
-                  class="block w-full pl-7 lg:pl-10 pr-2 lg:pr-3 py-2 lg:py-3 border-0 bg-gray-50/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 text-gray-900 placeholder-gray-500 text-xs lg:text-sm"
-                />
-              </div>
-            </div>
-            
-            <!-- Category Filter with Modern Design -->
-            <div class="w-full lg:w-48 flex-shrink-0">
-              <label class="block text-xs font-semibold text-gray-700 mb-1 lg:mb-2">Filter Kategori</label>
-              <div class="relative">
-                <select
-                  v-model="selectedCategory"
-                  class="block w-full px-2 lg:px-3 py-2 lg:py-3 border-0 bg-gray-50/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 text-gray-900 appearance-none cursor-pointer text-xs lg:text-sm"
-                >
-                  <option value="all">Semua Kategori</option>
-                  <option v-for="category in uniqueCategories" :key="category" :value="category">
-                    {{ category }}
-                  </option>
-                </select>
-                <div class="absolute inset-y-0 right-0 flex items-center pr-2 lg:pr-3 pointer-events-none">
-                  <svg class="h-3 lg:h-4 w-3 lg:w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Main Content with Modern Cards -->
-    <div class="container mx-auto px-4 py-4 lg:py-6">
+    <!-- Main Content -->
+    <div class="container mx-auto px-12 py-4 lg:py-6">
       <!-- Loading State -->
       <div v-if="isLoading" class="flex justify-center items-center py-8 lg:py-12">
         <div class="relative">
@@ -357,7 +334,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- CCTV List with Modern Card Design -->
+      <!-- CCTV List -->
       <div v-else-if="filteredCctvs.length > 0" class="space-y-3 lg:space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
           <div
@@ -410,19 +387,6 @@ onUnmounted(() => {
                 </span>
               </div>
 
-              <!-- Coordinates if available -->
-              <div v-if="formatCoordinates(cctv.coordinate)" class="flex items-center gap-2 mb-2 lg:mb-3 p-2 bg-gray-50 rounded-lg">
-                <div class="w-5 lg:w-6 h-5 lg:h-6 bg-red-100 rounded-md flex items-center justify-center flex-shrink-0">
-                  <svg class="w-2.5 lg:w-3 h-2.5 lg:h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
-                  </svg>
-                </div>
-                <div class="min-w-0 flex-1">
-                  <div class="text-xs text-gray-500 font-medium">Koordinat</div>
-                  <div class="text-xs text-gray-700 font-mono truncate">{{ formatCoordinates(cctv.coordinate) }}</div>
-                </div>
-              </div>
-
               <!-- Camera Type -->
               <div class="flex items-center gap-2 mb-2 lg:mb-3 p-2 bg-gray-50 rounded-lg">
                 <div class="w-5 lg:w-6 h-5 lg:h-6 bg-blue-100 rounded-md flex items-center justify-center flex-shrink-0">
@@ -458,7 +422,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Empty State with Modern Design -->
+      <!-- Empty State -->
       <div v-else class="text-center py-8 lg:py-12">
         <div class="bg-white/80 backdrop-blur-sm rounded-xl p-6 lg:p-8 max-w-md mx-auto border border-gray-100 shadow-lg">
           <div class="w-12 lg:w-16 h-12 lg:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 lg:mb-4">
