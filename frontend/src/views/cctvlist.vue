@@ -239,17 +239,17 @@ onUnmounted(() => {
               <!-- Stats Cards -->
               <div class="flex-1">
                 <div class="grid grid-cols-3 gap-2 lg:gap-3">
-                  <div class="rounded-xl p-3 lg:p-3 border border-white/30 bg-white/15 hover:bg-white/25 transition-colors duration-200 backdrop-blur-md text-white shadow-sm">
-                    <div class="text-white/90 text-xs font-semibold mb-1">Total Kamera</div>
-                    <div class="text-lg lg:text-xl font-bold">{{ cctvs.length }}</div>
+                  <div class="rounded-xl p-3 lg:p-3 border border-white/30 bg-white/80 hover:bg-white transition-colors duration-200 backdrop-blur-md text-white shadow-sm">
+                    <div class="text-gray-400 text-xs font-semibold mb-1">Total Kamera</div>
+                    <div class="text-lg text-gray-600 lg:text-xl font-bold">{{ cctvs.length }}</div>
                   </div>
-                  <div class="rounded-xl p-3 lg:p-3 border border-white/30 bg-white/15 hover:bg-white/25 transition-colors duration-200 backdrop-blur-md text-white shadow-sm">
-                    <div class="text-white/90 text-xs font-semibold mb-1">Aktif</div>
-                    <div class="text-lg lg:text-xl font-bold text-emerald-300">{{ cctvs.length }}</div>
+                  <div class="rounded-xl p-3 lg:p-3 border border-white/30 bg-white/80 hover:bg-white transition-colors duration-200 backdrop-blur-md text-white shadow-sm">
+                    <div class="text-gray-400 text-xs font-semibold mb-1">Aktif</div>
+                    <div class="text-lg lg:text-xl font-bold text-emerald-600">{{ cctvs.length }}</div>
                   </div>
-                  <div class="rounded-xl p-3 lg:p-3 border border-white/30 bg-white/15 hover:bg-white/25 transition-colors duration-200 backdrop-blur-md text-white shadow-sm">
-                    <div class="text-white/90 text-xs font-semibold mb-1">Kategori</div>
-                    <div class="text-lg lg:text-xl font-bold text-sky-200">{{ uniqueCategories.length }}</div>
+                  <div class="rounded-xl p-3 lg:p-3 border border-white/30 bg-white/80 hover:bg-white transition-colors duration-200 backdrop-blur-md text-white shadow-sm">
+                    <div class="text-gray-400 text-xs font-semibold mb-1">Kategori</div>
+                    <div class="text-lg lg:text-xl font-bold text-sky-600">{{ uniqueCategories.length }}</div>
                   </div>
                 </div>
               </div>
@@ -270,7 +270,7 @@ onUnmounted(() => {
                           v-model="searchQuery"
                           type="text"
                           placeholder="Cari berdasarkan lokasi, tipe kamera, atau kategori..."
-                          class="block w-full pl-7 lg:pl-10 pr-2 lg:pr-3 py-2 lg:py-3 border border-gray-200 bg-gray-50/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 text-gray-900 placeholder-gray-500 text-xs lg:text-sm"
+                          class="block w-full pl-7 lg:pl-10 pr-2 lg:pr-3 py-2 lg:py-3 border border-gray-200 bg-white/80 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 text-gray-900 placeholder-gray-500 text-xs lg:text-sm"
                         />
                       </div>
                     </div>
@@ -280,7 +280,7 @@ onUnmounted(() => {
                       <div class="relative">
                         <select
                           v-model="selectedCategory"
-                          class="block w-full px-2 lg:px-3 py-2 lg:py-3 border border-gray-200 bg-gray-50/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 text-gray-900 appearance-none cursor-pointer text-xs lg:text-sm"
+                          class="block w-full px-2 lg:px-3 py-2 lg:py-3 border border-gray-200 bg-white/80 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 text-gray-900 appearance-none cursor-pointer text-xs lg:text-sm"
                         >
                           <option value="all">Semua Kategori</option>
                           <option v-for="category in uniqueCategories" :key="category" :value="category">

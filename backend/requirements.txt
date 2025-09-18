@@ -4,8 +4,6 @@ httpx
 websockets
 opencv-python-headless
 ultralytics
-torch
-torchvision
 numpy
 Pillow
 sqlalchemy

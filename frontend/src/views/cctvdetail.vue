@@ -1,15 +1,15 @@
 <template>
   <div class="p-2 h-screen flex flex-col gap-0 relative">
     <!-- Bagian Atas: Video + Accuracy -->
-    <div class="flex flex-1 gap-4 mb-0">
+    <div class="flex flex-1 gap-4 mt-20 mb-0">
       <!-- Video CCTV (3/4) -->
-      <button 
-        class="px-3 py-1 rounded-md top-4 left-4 shadow-md h-[6vh] absolute z-50 bg-white" 
-        @click="goBack"
-      >
-        ← Back
-      </button>
-      <div class="flex bg-black w-auto max-h-[65vh] rounded-lg overflow-hidden">
+      <button class="px-3 py-1 rounded-md top-4 left-4 border border-gray-200 h-[6vh] absolute z-50 bg-white" @click="goBack">
+        ← Back </button>
+      <!-- Judul CCTV dari cctv.json (prioritas gunakan name, fallback ke location) -->
+      <div class="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-white/90 rounded-md px-4 py-2 text-3xl font-bold text-gray-900 max-w-[70vw] truncate">
+        <span class="font-medium">CCTV</span> {{ cctv.name || cctv.location || 'CCTV' }}
+      </div>
+      <div class="flex bg-black w-auto max-h-[80vh] rounded-lg overflow-hidden">
         <div class="aspect-video relative w-full h-full">
           <video ref="videoPlayer" id="cctv-player" class="w-full h-full object-contain" controls autoplay muted playsinline></video>
           <canvas 
@@ -22,7 +22,7 @@
       </div>
 
       <!-- Vehicle Counts (1/4) -->
-      <div class="flex-[1] max-h-[65vh] w-auto bg-white p-4 rounded-lg border overflow-y-auto relative">
+      <div class="flex-[1] max-h-[80vh] w-auto bg-white p-4 rounded-lg border overflow-y-auto relative">
         <h3 class="text-lg font-bold mb-3">Vehicle Counts</h3>
         <button @click="toggleDetection" :class="[ 'px-2 py-1 text-sm rounded absolute right-10 top-6 font-medium', isDetectionActive ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-green-500 text-white hover:bg-green-600' ]" > {{ isDetectionActive ? 'Stop Detection' : 'Start Detection' }} </button>
         <div class="space-y-3 mb-4">
@@ -38,54 +38,6 @@
             </div>
           </div>
           <div v-if="Object.keys(crossingCounts).length === 0" class="text-sm text-gray-500">Belum ada hitungan.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Bagian Bawah: Object Detection Data (1/4) -->
-    <div class="flex-none max-h-[35vh] bg-white mt-0 p-4 rounded-lg border overflow-y-auto">
-      <h3 class="text-lg font-bold mb-3">Object Detection Data</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Detection Status -->
-        <div class="bg-gray-50 p-3 rounded-lg">
-          <h4 class="font-semibold mb-2">Detection Status</h4>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span>Status:</span>
-              <span :class="isDetectionActive ? 'text-green-600 font-medium' : 'text-red-600 font-medium'">
-                {{ isDetectionActive ? 'Active' : 'Inactive' }}
-              </span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span>WebSocket:</span>
-              <span :class="getStatusColorClass(wsStatus)">
-                {{ wsStatus }}
-              </span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span>Objects Detected:</span>
-              <span class="font-medium">{{ detectedObjects.length }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Performance Metrics -->
-        <div class="bg-gray-50 p-3 rounded-lg">
-          <h4 class="font-semibold mb-2">Performance Metrics</h4>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span>Frame Rate:</span>
-              <span class="font-medium">{{ detectionUpdateRate }} FPS</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span>Canvas Size:</span>
-              <span class="font-medium">{{ canvasWidth }} x {{ canvasHeight }}</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span>Last Update:</span>
-              <span class="font-medium">{{ lastUpdateTime ? formatTimestamp(lastUpdateTime) : 'N/A' }}</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>
